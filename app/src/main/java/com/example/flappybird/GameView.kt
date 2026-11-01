@@ -42,7 +42,11 @@ class GameView(context: Context) : View(context) {
     private val pipeSpeed = 5.5f * d
 
     private var score = 0
-    private var best = 0
+    // Lưu kỷ lục bền vững bằng SharedPreferences
+    private val prefs = context.getSharedPreferences("flappy", Context.MODE_PRIVATE)
+    private var best = prefs.getInt("best", 0)
+    // Âm thanh quạc quạc
+    private val quack = QuackSound()
     private var lastFrameTime = 0L
 
     // ===== Bút vẽ =====
@@ -78,6 +82,11 @@ class GameView(context: Context) : View(context) {
     private val btnTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE; textAlign = Paint.Align.CENTER
         typeface = Typeface.DEFAULT_BOLD; textSize = 44f * d
+    private val authorPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(255, 240, 180); textAlign = Paint.Align.CENTER
+        typeface = Typeface.DEFAULT_BOLD; textSize = 24f * d
+        setShadowLayer(4f, 0f, 2f, Color.BLACK)
+    }
     }
 
     init {
@@ -124,7 +133,11 @@ class GameView(context: Context) : View(context) {
 
     private fun gameOver() {
         state = GameState.GAME_OVER
-        if (score > best) best = score
+        if (score > best) {
+            best = score
+            // Lưu kỷ lục vào bộ nhớ máy
+            prefs.edit().putInt("best", best).apply()
+        }
     }
 
     private fun jump() {
@@ -134,16 +147,35 @@ class GameView(context: Context) : View(context) {
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (event.action == MotionEvent.ACTION_DOWN) {
+            // Kiểm tra chạm vào con chim → phát tiếng quạc quạc
+            val dxBird = event.x - birdX
+            val dyBird = event.y - birdY
+            val hitBird = dxBird * dxBird + dyBird * dyBird < (birdR * 2f) * (birdR * 2f)
+            if (hitBird) quack.play()
+
             when (state) {
-                GameState.MENU -> startGame()
-                GameState.PLAYING -> jump()
+                GameState.MENU -> {
+                    // Chỉ bắt đầu khi chạm đúng nút BẮT ĐẦU
+                    val cx = screenW / 2f
+                    val cy = screenH * 0.72f
+                    val rx = 220f * d
+                    val ry = 80f * d
+                    if (event.x in (cx - rx)..(cx + rx) && event.y in (cy - ry)..(cy + ry)) {
+                        startGame()
+                    }
+                }
+                GameState.PLAYING -> {
+                    jump()
+                    // Chim vỗ cánh kêu quạc (tránh phát trùng nếu vừa chạm đúng chim)
+                    if (!hitBird) quack.play()
+                }
                 GameState.GAME_OVER -> {
-                    // Chỉ cho chơi lại khi chạm vào nút
+                    // Chỉ cho chơi lại khi chạm đúng nút
                     val cx = screenW / 2f
                     val cy = screenH / 2f + 120f * d
-                    val dx = event.x - cx
-                    val dy = event.y - cy
-                    if (dx * dx + dy * dy < (140f * d) * (140f * d)) {
+                    val rx = 220f * d
+                    val ry = 80f * d
+                    if (event.x in (cx - rx)..(cx + rx) && event.y in (cy - ry)..(cy + ry)) {
                         state = GameState.MENU
                     }
                 }
@@ -302,11 +334,11 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun drawMenu(canvas: Canvas) {
-        // Tiêu đề
-        canvas.drawText("FLAPPY BIRD", screenW / 2f, screenH * 0.22f, titlePaint)
-        // Hướng dẫn
-        canvas.drawText("Chạm để bay!", screenW / 2f, screenH * 0.62f, subPaint)
-        // Nút BẮT ĐẦU
+        // Tiêu đề gọn phía trên
+        canvas.drawText("FLAPPY BIRD", screenW / 2f, screenH * 0.20f, titlePaint)
+        // Kỷ lục hiển thị ngay trên sảnh
+        canvas.drawText("Kỷ lục: $best", screenW / 2f, screenH * 0.30f, subPaint)
+        // Nút BẮT ĐẦU gọn ở giữa
         val cx = screenW / 2f
         val cy = screenH * 0.72f
         val rx = 220f * d
@@ -314,6 +346,8 @@ class GameView(context: Context) : View(context) {
         val rect = android.graphics.RectF(cx - rx, cy - ry, cx + rx, cy + ry)
         canvas.drawRoundRect(rect, 40f * d, 40f * d, btnPaint)
         canvas.drawText("BẮT ĐẦU", cx, cy + 16f * d, btnTextPaint)
+        // Người sáng tạo ở cuối trang chủ
+        canvas.drawText("Người sáng tạo: minhnguyen", cx, screenH * 0.93f, authorPaint)
     }
 
     private fun drawScore(canvas: Canvas) {
