@@ -179,6 +179,13 @@ class GameView(context: Context) : View(context) {
         typeface = Typeface.DEFAULT_BOLD; textSize = 36f * d
     }
 
+    // Paint cho dòng credit góc phải
+    private val creditPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(170, 255, 255, 255); textAlign = Paint.Align.RIGHT
+        typeface = Typeface.DEFAULT; textSize = 22f * d
+        setShadowLayer(4f * d, 0f, 2f * d, Color.argb(130, 0, 0, 0))
+    }
+
     private val medalPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val flashPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
@@ -589,6 +596,8 @@ class GameView(context: Context) : View(context) {
             }
         }
 
+        drawCredit(canvas)
+
         if (flashTime > 0f) {
             flashPaint.alpha = ((flashTime / 0.4f) * 190f).toInt().coerceIn(0, 190)
             canvas.drawRect(0f, 0f, screenW, screenH, flashPaint)
@@ -924,5 +933,13 @@ class GameView(context: Context) : View(context) {
         c.drawRoundRect(mbr, 18f * d, 18f * d, buttonBorderPaint)
         buttonTextPaint.textSize = 28f * d
         c.drawText("MENU", mbr.centerX(), mbr.centerY() + 10f * d, buttonTextPaint)
+    }
+
+    /** Dòng credit góc phải màn hình */
+    private fun drawCredit(c: Canvas) {
+        creditPaint.textSize = 22f * d
+        val x = screenW - 16f * d
+        val y = groundY - 14f * d
+        c.drawText("cre:minhnguyen2009", x, y, creditPaint)
     }
 }
