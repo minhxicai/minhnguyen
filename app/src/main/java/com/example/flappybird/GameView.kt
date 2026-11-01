@@ -214,19 +214,18 @@ class GameView(context: Context) : View(context) {
                     Cloud(
                         x = Random.nextFloat() * screenW,
                         y = screenH * (0.08f + Random.nextFloat() * 0.30f),
-
-    override fun onDetachedFromWindow() {
-        super.onDetachedFromWindow()
-        // Giải phóng AudioTrack khi view bị huỷ để tránh rò rỉ
-        try { soundManager.release() } catch (_: Exception) {}
-    }
-
                         r = (36f + Random.nextFloat() * 30f) * d,
                         speed = (0.4f + Random.nextFloat() * 0.5f) * d
                     )
                 )
             }
         }
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        // Giải phóng AudioTrack khi view bị huỷ để tránh rò rỉ
+        try { soundManager.release() } catch (_: Exception) {}
     }
 
     // ---------- Cài đặt ----------
