@@ -214,6 +214,13 @@ class GameView(context: Context) : View(context) {
                     Cloud(
                         x = Random.nextFloat() * screenW,
                         y = screenH * (0.08f + Random.nextFloat() * 0.30f),
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        // Giải phóng AudioTrack khi view bị huỷ để tránh rò rỉ
+        try { soundManager.release() } catch (_: Exception) {}
+    }
+
                         r = (36f + Random.nextFloat() * 30f) * d,
                         speed = (0.4f + Random.nextFloat() * 0.5f) * d
                     )
@@ -596,7 +603,8 @@ class GameView(context: Context) : View(context) {
             }
         }
 
-        drawCredit(canvas)
+        // Credit chỉ hiển thị ở trang chủ
+        if (state == GameState.MENU) drawCredit(canvas)
 
         if (flashTime > 0f) {
             flashPaint.alpha = ((flashTime / 0.4f) * 190f).toInt().coerceIn(0, 190)
@@ -940,6 +948,6 @@ class GameView(context: Context) : View(context) {
         creditPaint.textSize = 22f * d
         val x = screenW - 16f * d
         val y = groundY - 14f * d
-        c.drawText("cre:minhnguyen2009", x, y, creditPaint)
+        c.drawText("cre: minhnguyen2009", x, y, creditPaint)
     }
 }

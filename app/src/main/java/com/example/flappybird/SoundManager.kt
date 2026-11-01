@@ -3,60 +3,100 @@ package com.example.flappybird
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
-import android.os.Handler
-import android.os.Looper
 
 /**
  * Quản lý âm thanh tổng hợp (không cần file raw).
- * Tạo nhiều hiệu ứng: vỗ cánh, ăn điểm, va chạm, game over.
+ * Các AudioTrack được TẠO SẴN thành pool để tránh khựng frame khi bấm.
  */
 class SoundManager {
 
     var enabled = true
 
     private val sampleRate = 44100
-    private val handler = Handler(Looper.getMainLooper())
 
-    // Tổng hợp sẵn các mẫu âm thanh
+    // Tổng hợp sẵn các mẫu âm thanh (chỉ chạy 1 lần khi khởi tạo)
     private val jumpSamples = synthQuack()
     private val pointSamples = synthBeep(880.0, 1320.0, 130)
     private val hitSamples = synthNoiseBurst(240)
     private val gameOverSamples = synthDescend(660.0, 200.0, 450)
 
-    fun playJump() { if (enabled) play(jumpSamples, 160) }
-    fun playPoint() { if (enabled) play(pointSamples, 130) }
-    fun playHit() { if (enabled) play(hitSamples, 240) }
-    fun playGameOver() { if (enabled) play(gameOverSamples, 450) }
+    // Pool track tạo sẵn: nhiều track cho âm lặp lại nhanh (vỗ cánh)
+    private val jumpPool = TrackPool(jumpSamples, 4)
+    private val pointPool = TrackPool(pointSamples, 2)
+    private val hitPool = TrackPool(hitSamples, 1)
+    private val gameOverPool = TrackPool(gameOverSamples, 1)
 
-    /** Phát một mẫu âm thanh rồi tự giải phóng bộ nhớ */
-    private fun play(samples: ShortArray, durationMs: Int) {
-        try {
-            val track = AudioTrack.Builder()
-                .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_GAME)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build()
-                )
-                .setAudioFormat(
-                    AudioFormat.Builder()
-                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .setSampleRate(sampleRate)
-                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                        .build()
-                )
-                .setBufferSizeInBytes(samples.size * 2)
-                .setTransferMode(AudioTrack.MODE_STATIC)
-                .build()
-            track.write(samples, 0, samples.size)
-            track.play()
-            handler.postDelayed({
-                try { track.stop() } catch (_: Exception) {}
-                try { track.release() } catch (_: Exception) {}
-            }, durationMs.toLong() + 80)
-        } catch (_: Exception) {
-            // Bỏ qua nếu thiết bị không hỗ trợ
+    fun playJump() { if (enabled) jumpPool.play() }
+    fun playPoint() { if (enabled) pointPool.play() }
+    fun playHit() { if (enabled) hitPool.play() }
+    fun playGameOver() { if (enabled) gameOverPool.play() }
+
+    /** Giải phóng toàn bộ AudioTrack */
+    fun release() {
+        jumpPool.release()
+        pointPool.release()
+        hitPool.release()
+        gameOverPool.release()
+    }
+
+    /** Nhóm AudioTrack dùng vòng xoay để có thể chồng âm mà không cần build lại */
+    private inner class TrackPool(samples: ShortArray, count: Int) {
+        private val tracks = ArrayList<AudioTrack>(count)
+        private var idx = 0
+
+        init {
+            repeat(count) {
+                val t = try { buildTrack(samples) } catch (_: Exception) { null }
+                if (t != null) tracks.add(t)
+            }
         }
+
+        fun play() {
+            if (tracks.isEmpty()) return
+            val t = tracks[idx]
+            idx = (idx + 1) % tracks.size
+            try {
+                // Dùng pause thay stop: nhanh hơn nhiều, không block main thread
+                if (t.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                    t.pause()
+                    t.flush()
+                }
+                t.setPlaybackHeadPosition(0)
+                t.play()
+            } catch (_: Exception) {
+                // Bỏ qua nếu thiết bị không hỗ trợ
+            }
+        }
+
+        fun release() {
+            for (t in tracks) {
+                try { t.stop() } catch (_: Exception) {}
+                try { t.release() } catch (_: Exception) {}
+            }
+            tracks.clear()
+        }
+    }
+
+    private fun buildTrack(samples: ShortArray): AudioTrack {
+        val track = AudioTrack.Builder()
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_GAME)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            .setAudioFormat(
+                AudioFormat.Builder()
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setSampleRate(sampleRate)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                    .build()
+            )
+            .setBufferSizeInBytes(samples.size * 2)
+            .setTransferMode(AudioTrack.MODE_STATIC)
+            .build()
+        track.write(samples, 0, samples.size)
+        return track
     }
 
     /** Tiếng vịt kêu "quạc quạc" */
@@ -85,26 +125,29 @@ class SoundManager {
             val freq = f1 + (f2 - f1) * p
             phase += 2.0 * Math.PI * freq / sampleRate
             val env = Math.sin(Math.PI * p)
-            val s = Math.sin(phase) + 0.25 * Math.sin(phase * 2)
+            val s = Math.sin(phase)
             data[i] = (s * env * 9000).toInt().coerceIn(-32768, 32767).toShort()
         }
         return data
     }
 
-    /** Tiếng va chạm (nhiễu) */
+    /** Tiếng va chạm (nhiễu trắng tắt dần) */
     private fun synthNoiseBurst(durationMs: Int): ShortArray {
         val n = sampleRate * durationMs / 1000
         val data = ShortArray(n)
+        var last = 0.0
         for (i in 0 until n) {
             val p = i.toDouble() / n
-            val env = Math.sin(Math.PI * p)
-            val s = (Math.random() * 2 - 1) * env
-            data[i] = (s * 12000).toInt().coerceIn(-32768, 32767).toShort()
+            val white = Math.random() * 2 - 1
+            // Lọc thông thấp nhẹ cho đỡ chói
+            last = last * 0.55 + white * 0.45
+            val env = Math.pow(1.0 - p, 2.0)
+            data[i] = (last * env * 14000).toInt().coerceIn(-32768, 32767).toShort()
         }
         return data
     }
 
-    /** Tiếng game over (giai điệu đi xuống) */
+    /** Tiếng tụt âm khi thua */
     private fun synthDescend(f1: Double, f2: Double, durationMs: Int): ShortArray {
         val n = sampleRate * durationMs / 1000
         val data = ShortArray(n)
