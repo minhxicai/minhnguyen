@@ -82,11 +82,11 @@ class GameView(context: Context) : View(context) {
     private val btnTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE; textAlign = Paint.Align.CENTER
         typeface = Typeface.DEFAULT_BOLD; textSize = 44f * d
+    }
     private val authorPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(255, 240, 180); textAlign = Paint.Align.CENTER
         typeface = Typeface.DEFAULT_BOLD; textSize = 24f * d
         setShadowLayer(4f, 0f, 2f, Color.BLACK)
-    }
     }
 
     init {
