@@ -12,6 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-
-rootProject.name = "DongHoVN"
+rootProject.name = "HtmlCssEditor"
 include ':app'

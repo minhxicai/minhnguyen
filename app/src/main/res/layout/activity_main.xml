@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#1E1E1E">
+
+    <!-- Thanh trên cùng -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#252526"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/tvTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="index.html"
+            android:textColor="#CCCCCC"
+            android:textSize="14sp"
+            android:paddingStart="8dp"/>
+
+        <Button
+            android:id="@+id/btnRun"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Run"
+            android:textSize="12sp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="10dp"
+            android:backgroundTint="#0E639C"
+            android:textColor="#FFFFFF"/>
+    </LinearLayout>
+
+    <!-- Tab chọn HTML / CSS -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="#252526">
+
+        <TextView
+            android:id="@+id/tabHtml"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="index.html"
+            android:textSize="13sp"
+            android:padding="12dp"
+            android:gravity="center"
+            android:textColor="#FFFFFF"
+            android:background="#1E1E1E"/>
+
+        <TextView
+            android:id="@+id/tabCss"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="style.css"
+            android:textSize="13sp"
+            android:padding="12dp"
+            android:gravity="center"
+            android:textColor="#AAAAAA"
+            android:background="#2D2D2D"/>
+    </LinearLayout>
+
+    <!-- Vùng code -->
+    <WebView
+        android:id="@+id/webEditor"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#1E1E1E"/>
+</LinearLayout>

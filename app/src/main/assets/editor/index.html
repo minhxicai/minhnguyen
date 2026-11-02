@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closetag.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<style>
+  html, body { margin:0; padding:0; height:100%; background:#1E1E1E; }
+  .CodeMirror { height:100%; font-size:14px; font-family: 'Menlo','Consolas',monospace; }
+</style>
+</head>
+<body>
+<textarea id="code"></textarea>
+<script>
+  var cm = CodeMirror.fromTextArea(document.getElementById('code'), {
+    lineNumbers: true,
+    mode: 'htmlmixed',
+    theme: 'material-darker',
+    lineWrapping: true,
+    autoCloseTags: true,
+    autoCloseBrackets: true,
+    indentUnit: 2,
+    tabSize: 2
+  });
+
+  // Đặt nội dung từ app truyền vào
+  window.setCode = function(value, mode) {
+    cm.setOption('mode', mode || 'htmlmixed');
+    cm.setValue(value || '');
+  };
+
+  // Lấy nội dung ra để app đọc
+  window.getCode = function() {
+    return cm.getValue();
+  };
+
+  // Lắng nghe thay đổi -> báo lên app để auto-save
+  cm.on('change', function() {
+    if (window.AndroidBridge && window.AndroidBridge.onCodeChanged) {
+      window.AndroidBridge.onCodeChanged(cm.getValue());
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-// Cấu hình Gradle gốc cho dự án
+// Build script gốc
 plugins {
     id 'com.android.application' version '8.2.2' apply false
 }
