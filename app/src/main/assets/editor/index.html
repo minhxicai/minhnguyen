@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
@@ -12,9 +13,14 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closetag.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/xml-hint.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/html-hint.min.js"></script>
 <style>
   html, body { margin:0; padding:0; height:100%; background:#1E1E1E; }
   .CodeMirror { height:100%; font-size:14px; font-family: 'Menlo','Consolas',monospace; }
+  .CodeMirror-hints { background:#252526; border:1px solid #3C3C3C; color:#D4D4D4; }
+  .CodeMirror-hint-active { background:#0E639C !important; color:#fff !important; }
 </style>
 </head>
 <body>
@@ -28,7 +34,120 @@
     autoCloseTags: true,
     autoCloseBrackets: true,
     indentUnit: 2,
-    tabSize: 2
+    tabSize: 2,
+    extraKeys: {
+      "Ctrl-Space": "autocomplete",
+      "Tab": function(cm) {
+        if (cm.somethingSelected()) cm.indentSelection('add');
+        else cm.replaceSelection("  ");
+      }
+    }
+  });
+
+  // ===== DANH SÁCH THẺ HTML GỢI Ý =====
+  var TAG_HINTS = [
+    { text: '<html>', displayText: '<html> ... </html> (khung trang)' },
+    { text: '<head>', displayText: '<head>' },
+    { text: '<body>', displayText: '<body>' },
+    { text: '<title>', displayText: '<title>' },
+    { text: '<meta>', displayText: '<meta charset="UTF-8">' },
+    { text: '<link>', displayText: '<link rel="stylesheet">' },
+    { text: '<script>', displayText: '<script>' },
+    { text: '<style>', displayText: '<style>' },
+    { text: '<div>', displayText: '<div>' },
+    { text: '<span>', displayText: '<span>' },
+    { text: '<p>', displayText: '<p>' },
+    { text: '<h1>', displayText: '<h1>' },
+    { text: '<h2>', displayText: '<h2>' },
+    { text: '<h3>', displayText: '<h3>' },
+    { text: '<a>', displayText: '<a href="">' },
+    { text: '<img>', displayText: '<img src="" alt="">' },
+    { text: '<ul>', displayText: '<ul>' },
+    { text: '<ol>', displayText: '<ol>' },
+    { text: '<li>', displayText: '<li>' },
+    { text: '<table>', displayText: '<table>' },
+    { text: '<tr>', displayText: '<tr>' },
+    { text: '<td>', displayText: '<td>' },
+    { text: '<th>', displayText: '<th>' },
+    { text: '<form>', displayText: '<form>' },
+    { text: '<input>', displayText: '<input type="text">' },
+    { text: '<button>', displayText: '<button>' },
+    { text: '<textarea>', displayText: '<textarea>' },
+    { text: '<select>', displayText: '<select>' },
+    { text: '<option>', displayText: '<option>' },
+    { text: '<label>', displayText: '<label>' },
+    { text: '<header>', displayText: '<header>' },
+    { text: '<footer>', displayText: '<footer>' },
+    { text: '<nav>', displayText: '<nav>' },
+    { text: '<section>', displayText: '<section>' },
+    { text: '<article>', displayText: '<article>' },
+    { text: '<br>', displayText: '<br>' },
+    { text: '<hr>', displayText: '<hr>' },
+    { text: '<strong>', displayText: '<strong>' },
+    { text: '<em>', displayText: '<em>' }
+  ];
+
+  // Gợi ý thẻ khi gõ '<'
+  function htmlTagHint(cmInstance) {
+    var cur = cmInstance.getCursor();
+    var line = cmInstance.getLine(cur.line);
+    var start = cur.ch;
+    while (start > 0 && /[\w-]/.test(line.charAt(start - 1))) start--;
+    var prefix = line.slice(start, cur.ch).toLowerCase();
+    var list = TAG_HINTS.filter(function(h) {
+      return h.text.toLowerCase().indexOf(prefix) === 0;
+    });
+    return {
+      list: list.length ? list : TAG_HINTS.slice(0, 12),
+      from: CodeMirror.Pos(cur.line, start),
+      to: CodeMirror.Pos(cur.line, cur.ch)
+    };
+  }
+
+  // Bật autocomplete tự động khi gõ
+  cm.on('inputRead', function(cmInstance, change) {
+    var typed = change.text[0];
+    if (typed === '<') {
+      cmInstance.showHint({ hint: htmlTagHint, completeSingle: false });
+    } else if (/[a-zA-Z]/.test(typed)) {
+      // Gợi ý tiếp khi đang gõ tên thẻ sau '<'
+      var cur = cmInstance.getCursor();
+      var line = cmInstance.getLine(cur.line).slice(0, cur.ch);
+      var lt = line.lastIndexOf('<');
+      if (lt >= 0 && line.indexOf('>', lt) === -1) {
+        cmInstance.showHint({ hint: htmlTagHint, completeSingle: false });
+      }
+    }
+  });
+
+  // Tự động chèn khung HTML khi gõ thẻ <html>
+  var htmlSnippetDone = false;
+  var HTML_SKELETON = '<html>\n<head>\n  <meta charset="UTF-8">\n  <title>My Page</title>\n</head>\n<body>\n\n</body>\n</html>';
+
+  cm.on('change', function(cmInstance, change) {
+    if (change.origin === 'setValue') return;
+    var text = change.text.join('\n');
+    // Nếu vừa gõ xong '<html>' gần nhất
+    if (/<html>\s*$/i.test(text) || /<html>$/.test(text)) {
+      var cur = cmInstance.getCursor();
+      var doc = cmInstance.getValue();
+      var before = doc.slice(0, cmInstance.indexFromPos(cur));
+      // Chỉ chèn khi <html> nằm ở đầu tài liệu (khung chính)
+      if (/^\s*<html>\s*$/im.test(before.trim().slice(-6)) || before.trim() === '<html>') {
+        // Xoá '<html>' vừa gõ và chèn khung hoàn chỉnh
+        cmInstance.replaceRange(HTML_SKELETON,
+          CodeMirror.Pos(cur.line, cur.ch - 6), cur);
+        // Đặt con trỏ vào trong <body>
+        var full = cmInstance.getValue();
+        var bodyIdx = full.indexOf('<body>');
+        if (bodyIdx >= 0) {
+          var upto = full.slice(0, bodyIdx + 6);
+          var lines = upto.split('\n');
+          cmInstance.setCursor(CodeMirror.Pos(lines.length - 1, lines[lines.length - 1].length));
+        }
+        htmlSnippetDone = true;
+      }
+    }
   });
 
   // Đặt nội dung từ app truyền vào
