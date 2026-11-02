@@ -7,6 +7,8 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.os.Build
+import android.os.Handler
+import android.os.HandlerThread
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.view.MotionEvent
@@ -54,6 +56,10 @@ class GameView(context: Context) : View(context) {
 
     private val prefs = context.getSharedPreferences("flappy_prefs", Context.MODE_PRIVATE)
     private val soundManager = SoundManager()
+
+    // Luồng nền cho rung/âm thanh: tránh chặn UI thread gây khựng
+    private val effectThread = HandlerThread("flappy-effects").apply { start() }
+    private val audioHandler = Handler(effectThread.looper)
 
     // ---- Cài đặt người chơi ----
     private var soundEnabled = true
@@ -151,6 +157,8 @@ class GameView(context: Context) : View(context) {
     private val coinBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(200, 140, 0); style = Paint.Style.STROKE; strokeWidth = 4f * d
     }
+    // Ruột đồng xu dùng paint riêng, tránh đổi màu paint viền giữa các frame
+    private val coinInnerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(200, 140, 0) }
     private val particlePaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -244,6 +252,8 @@ class GameView(context: Context) : View(context) {
         super.onDetachedFromWindow()
         // Giải phóng AudioTrack khi view bị huỷ để tránh rò rỉ
         try { soundManager.release() } catch (_: Exception) {}
+        // Dừng luồng nền hiệu ứng
+        try { effectThread.quitSafely() } catch (_: Exception) {}
     }
 
     // ---------- Cài đặt ----------
@@ -291,6 +301,11 @@ class GameView(context: Context) : View(context) {
 
     private fun vibrate(ms: Long) {
         if (!vibrateEnabled) return
+        // Đẩy rung sang luồng riêng để không chặn UI thread khi bấm
+        audioHandler.post { doVibrate(ms) }
+    }
+
+    private fun doVibrate(ms: Long) {
         try {
             val v = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator ?: return
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -834,8 +849,7 @@ class GameView(context: Context) : View(context) {
             c.scale(wScale, 1f, coin.x, coin.y)
             c.drawCircle(coin.x, coin.y, coinR, coinPaint)
             c.drawCircle(coin.x, coin.y, coinR, coinBorderPaint)
-            coinBorderPaint.color = Color.rgb(200, 140, 0)
-            c.drawCircle(coin.x, coin.y, coinR * 0.45f, coinBorderPaint)
+            c.drawCircle(coin.x, coin.y, coinR * 0.45f, coinInnerPaint)
             c.restore()
         }
     }
@@ -865,6 +879,16 @@ class GameView(context: Context) : View(context) {
     }
 
     // ---------- Chim ----------
+    // Object tái sử dụng: tránh cấp phát mỗi frame (nguồn gây GC -> khựng)
+    private val tailPath = android.graphics.Path()
+    private val wingPath = android.graphics.Path()
+    private val wingInnerPath = android.graphics.Path()
+    private val beakTopPath = android.graphics.Path()
+    private val beakBottomPath = android.graphics.Path()
+    private val miniBeakPath = android.graphics.Path()
+    private val birdOvalRect = RectF()
+    private val birdHighlightRect = RectF()
+
     private fun drawBird(c: Canvas) {
         val r = birdR
         c.save()
@@ -880,7 +904,8 @@ class GameView(context: Context) : View(context) {
         birdBlushPaint.color = Color.argb(85, 255, 120, 120)
 
         // Đuôi chim phía sau thân
-        val tail = android.graphics.Path()
+        val tail = tailPath
+        tail.rewind()
         tail.moveTo(birdX - r * 0.70f, birdY - r * 0.16f)
         tail.lineTo(birdX - r * 1.46f, birdY - r * 0.52f)
         tail.lineTo(birdX - r * 1.26f, birdY + r * 0.02f)
@@ -891,17 +916,20 @@ class GameView(context: Context) : View(context) {
         c.drawPath(tail, birdOutlinePaint)
 
         // Thân kèm bóng đổ nhẹ phía dưới
-        c.drawOval(RectF(birdX - r * 0.92f, birdY - r * 0.08f, birdX + r * 0.92f, birdY + r * 1.04f), birdShadowPaint)
+        birdOvalRect.set(birdX - r * 0.92f, birdY - r * 0.08f, birdX + r * 0.92f, birdY + r * 1.04f)
+        c.drawOval(birdOvalRect, birdShadowPaint)
         c.drawCircle(birdX, birdY, r, birdBodyPaint)
         // Vùng sáng phía trên tạo khối bóng tròn
-        c.drawOval(RectF(birdX - r * 0.74f, birdY - r * 0.93f, birdX + r * 0.34f, birdY - r * 0.08f), birdHighlightPaint)
+        birdHighlightRect.set(birdX - r * 0.74f, birdY - r * 0.93f, birdX + r * 0.34f, birdY - r * 0.08f)
+        c.drawOval(birdHighlightRect, birdHighlightPaint)
         c.drawCircle(birdX, birdY, r, birdOutlinePaint)
 
         // Cánh vỗ: xoay quanh khớp cánh theo nhịp vỗ
         val wingAngle = -38f + birdFlap * 78f
         c.save()
         c.rotate(wingAngle, birdX - r * 0.10f, birdY + r * 0.10f)
-        val wing = android.graphics.Path()
+        val wing = wingPath
+        wing.rewind()
         wing.moveTo(birdX - r * 0.02f, birdY - r * 0.10f)
         wing.quadTo(birdX - r * 0.90f, birdY - r * 0.42f, birdX - r * 1.24f, birdY + r * 0.10f)
         wing.quadTo(birdX - r * 0.86f, birdY + r * 0.46f, birdX - r * 0.02f, birdY + r * 0.34f)
@@ -909,7 +937,8 @@ class GameView(context: Context) : View(context) {
         c.drawPath(wing, birdWingPaint)
         c.drawPath(wing, birdOutlinePaint)
         // Vệt sáng trên cánh
-        val wingInner = android.graphics.Path()
+        val wingInner = wingInnerPath
+        wingInner.rewind()
         wingInner.moveTo(birdX - r * 0.12f, birdY + r * 0.02f)
         wingInner.quadTo(birdX - r * 0.72f, birdY - r * 0.20f, birdX - r * 0.96f, birdY + r * 0.14f)
         wingInner.quadTo(birdX - r * 0.70f, birdY + r * 0.30f, birdX - r * 0.12f, birdY + r * 0.22f)
@@ -925,7 +954,8 @@ class GameView(context: Context) : View(context) {
 
         // Mỏ trên và mỏ dưới tách rời, hở ra theo nhịp vỗ cánh
         val mouthOpen = (1f - birdFlap) * r * 0.10f
-        val beakTop = android.graphics.Path()
+        val beakTop = beakTopPath
+        beakTop.rewind()
         beakTop.moveTo(birdX + r * 0.72f, birdY - r * 0.04f)
         beakTop.lineTo(birdX + r * 1.42f, birdY + r * 0.14f)
         beakTop.lineTo(birdX + r * 0.74f, birdY + r * 0.16f)
@@ -933,7 +963,8 @@ class GameView(context: Context) : View(context) {
         c.drawPath(beakTop, birdBeakPaint)
         c.drawPath(beakTop, birdOutlinePaint)
 
-        val beakBottom = android.graphics.Path()
+        val beakBottom = beakBottomPath
+        beakBottom.rewind()
         beakBottom.moveTo(birdX + r * 0.74f, birdY + r * 0.18f)
         beakBottom.lineTo(birdX + r * 1.30f, birdY + r * 0.26f + mouthOpen)
         beakBottom.lineTo(birdX + r * 0.74f, birdY + r * 0.46f)
@@ -1028,7 +1059,8 @@ class GameView(context: Context) : View(context) {
         c.drawCircle(px, py, pr, birdOutlinePaint)
         c.drawCircle(px + pr * 0.42f, py - pr * 0.32f, pr * 0.32f, birdEyePaint)
         c.drawCircle(px + pr * 0.50f, py - pr * 0.30f, pr * 0.15f, birdPupilPaint)
-        val mb = android.graphics.Path()
+        val mb = miniBeakPath
+        mb.rewind()
         mb.moveTo(px + pr * 0.82f, py + pr * 0.02f)
         mb.lineTo(px + pr * 1.42f, py + pr * 0.20f)
         mb.lineTo(px + pr * 0.82f, py + pr * 0.40f)
