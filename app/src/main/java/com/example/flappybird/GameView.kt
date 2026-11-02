@@ -343,6 +343,13 @@ class GameView(context: Context) : View(context) {
         flashTime = 0.12f
         vibrate(140)
         playSound { soundManager.playHit() }
+        // Tiếng "rơi" vang lên sau tiếng va chạm một nhịp ngắn
+        val stamp = gameOverAt
+        audioHandler.postDelayed({
+            if (state == GameState.GAME_OVER && gameOverAt == stamp) {
+                playSound { soundManager.playGameOver() }
+            }
+        }, 220L)
         spawnParticles(birdX, birdY, 22, Color.rgb(255, 220, 90), 90f * d, 320f * d, 5f * d)
         spawnParticles(birdX, birdY, 12, Color.WHITE, 60f * d, 220f * d, 4f * d)
         totalGames++
