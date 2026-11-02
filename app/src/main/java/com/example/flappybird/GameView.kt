@@ -968,6 +968,23 @@ class GameView(context: Context) : View(context) {
         buttonTextPaint.textSize = 30f * d
         c.drawText("CỬA HÀNG", shr.centerX(), shr.centerY() + 10f * d, buttonTextPaint)
 
+        // Chim mini xem trước skin đang dùng, đặt bên trái nút cửa hàng
+        val pr = 17f * d
+        val px = shr.left - pr - 12f * d
+        val py = shr.centerY()
+        birdBodyPaint.color = currentSkin.body
+        birdWingPaint.color = currentSkin.wing
+        c.drawCircle(px, py, pr, birdBodyPaint)
+        c.drawCircle(px, py, pr, birdOutlinePaint)
+        c.drawCircle(px + pr * 0.42f, py - pr * 0.32f, pr * 0.32f, birdEyePaint)
+        c.drawCircle(px + pr * 0.50f, py - pr * 0.30f, pr * 0.15f, birdPupilPaint)
+        val mb = android.graphics.Path()
+        mb.moveTo(px + pr * 0.82f, py + pr * 0.02f)
+        mb.lineTo(px + pr * 1.42f, py + pr * 0.20f)
+        mb.lineTo(px + pr * 0.82f, py + pr * 0.40f)
+        mb.close()
+        c.drawPath(mb, birdBeakPaint)
+
         // Thành tích
         smallPaint.textSize = 27f * d
         c.drawText("KỶ LỤC: $best", screenW / 2f, screenH * 0.905f, smallPaint)
