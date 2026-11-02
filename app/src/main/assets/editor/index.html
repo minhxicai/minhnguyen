@@ -93,6 +93,8 @@
     var line = cmInstance.getLine(cur.line);
     var start = cur.ch;
     while (start > 0 && /[\w-]/.test(line.charAt(start - 1))) start--;
+    // Gộp cả dấu '<' vào vùng thay thế để không sinh ra '<<html>'
+    if (start > 0 && line.charAt(start - 1) === '<') start--;
     var prefix = line.slice(start, cur.ch).toLowerCase();
     var list = TAG_HINTS.filter(function(h) {
       return h.text.toLowerCase().indexOf(prefix) === 0;
@@ -120,31 +122,45 @@
     }
   });
 
-  // Tự động chèn khung HTML đầy đủ khi gõ thẻ <html>
+  // ===== TỰ ĐỘNG CHÈN KHUNG HTML ĐẦY ĐỦ KHI GÕ <html> =====
   var HTML_SKELETON = '<!DOCTYPE html>\n<html>\n<head>\n<title>Tên Của Trang Web</title>\n</head>\n<body>\n<p>Nội Dung Của Trang Web</p>\n</body>\n</html>';
 
+  // Thay toàn bộ tài liệu bằng khung mẫu và đặt con trỏ vào tên trang
+  function insertHtmlSkeleton(cmInstance, startLine) {
+    cmInstance.replaceRange(
+      HTML_SKELETON,
+      CodeMirror.Pos(0, 0),
+      CodeMirror.Pos(cmInstance.lastLine(), cmInstance.getLine(cmInstance.lastLine()).length),
+      '+skeleton'
+    );
+    var tIdx = HTML_SKELETON.indexOf('Tên Của Trang Web');
+    if (tIdx >= 0) {
+      var upto = HTML_SKELETON.slice(0, tIdx);
+      var ls = upto.split('\n');
+      // Đưa con trỏ vào ngay giữa "Tên Của Trang Web" để sửa luôn
+      cmInstance.setCursor(CodeMirror.Pos(ls.length - 1, ls[ls.length - 1].length));
+    }
+    cmInstance.focus();
+  }
+
   cm.on('change', function(cmInstance, change) {
-    if (change.origin === 'setValue') return;
-    var text = change.text.join('\n');
-    // Nếu vừa gõ xong '<html>' tại vị trí con trỏ
-    if (/<html>\s*$/i.test(text)) {
+    if (change.origin === 'setValue' || change.origin === '+skeleton') return;
+    var typed = change.text ? change.text.join('') : '';
+    // Chỉ xử lý khi người dùng vừa gõ ký tự '>'
+    if (typed.indexOf('>') === -1) return;
+    // Chờ autoCloseTags xử lý xong rồi mới kiểm tra
+    setTimeout(function() {
       var cur = cmInstance.getCursor();
-      var before = cmInstance.getRange(CodeMirror.Pos(0, 0), cur);
-      // Chỉ chèn khi <html> là nội dung chính (tài liệu gần như trống)
-      if (before.replace(/<html>\s*$/i, '').trim() === '') {
-        // Thay đoạn '<html>' vừa gõ bằng khung hoàn chỉnh
-        cmInstance.replaceRange(HTML_SKELETON,
-          CodeMirror.Pos(cur.line, cur.ch - 6), cur);
-        // Đặt con trỏ vào trong <title>
+      var lineText = cmInstance.getLine(cur.line).slice(0, cur.ch);
+      // Dòng bắt đầu bằng <html> (kể cả khi đã bị auto-close thêm </html>)
+      if (/^\s*<html>/i.test(lineText)) {
         var full = cmInstance.getValue();
-        var tIdx = full.indexOf('Tên Của Trang Web');
-        if (tIdx >= 0) {
-          var upto = full.slice(0, tIdx);
-          var lines = upto.split('\n');
-          cmInstance.setCursor(CodeMirror.Pos(lines.length - 1, lines[lines.length - 1].length));
+        // Chỉ chèn nếu tài liệu chưa phải một trang HTML hoàn chỉnh
+        if (full.toLowerCase().indexOf('<!doctype') === -1) {
+          insertHtmlSkeleton(cmInstance);
         }
       }
-    }
+    }, 10);
   });
 
   // Đặt nội dung từ app truyền vào
