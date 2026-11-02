@@ -23,7 +23,7 @@ import kotlin.random.Random
  */
 class GameView(context: Context) : View(context) {
 
-    private enum class GameState { MENU, PLAYING, GAME_OVER }
+    private enum class GameState { MENU, SHOP, PLAYING, GAME_OVER }
 
     /** Ba mức độ khó: hệ số khoảng trống ống và tốc độ cuộn */
     private enum class Difficulty(val label: String, val gapMul: Float, val speedMul: Float) {
@@ -33,6 +33,15 @@ class GameView(context: Context) : View(context) {
     }
 
     private enum class Theme { DAY, NIGHT }
+
+    /** Skin cho chim: giá bằng xu tích luỹ, màu vẽ trực tiếp bằng Canvas */
+    private enum class Skin(val label: String, val price: Int, val body: Int, val wing: Int, val belly: Int) {
+        CLASSIC("CỔ ĐIỂN", 0, 0xFFFFD73C.toInt(), 0xFFF5B41E.toInt(), 0xFFFFF0AA.toInt()),
+        RUBY("HỒNG NGỌC", 20, 0xFFFF6B6B.toInt(), 0xFFD93F3F.toInt(), 0xFFFFC2C2.toInt()),
+        OCEAN("ĐẠI DƯƠNG", 30, 0xFF4FC3F7.toInt(), 0xFF2196C9.toInt(), 0xFFC8EEFF.toInt()),
+        FOREST("RỪNG XANH", 40, 0xFF7ED957.toInt(), 0xFF4CAF35.toInt(), 0xFFD8F5C4.toInt()),
+        GALAXY("VŨ TRỤ", 50, 0xFF9B6BFF.toInt(), 0xFF6A3FD1.toInt(), 0xFFDCC8FF.toInt())
+    }
 
     private var state = GameState.MENU
 
@@ -58,6 +67,11 @@ class GameView(context: Context) : View(context) {
     private var best = 0
     private var totalGames = 0
     private var totalScore = 0
+
+    // ---- Ví xu & skin ----
+    private var wallet = 0                          // Tổng xu tích luỹ để mua skin
+    private val ownedSkins = mutableSetOf<Skin>()    // Skin đã sở hữu
+    private var currentSkin = Skin.CLASSIC
 
     // ---- Chim ----
     private var birdX = 0f
@@ -241,6 +255,14 @@ class GameView(context: Context) : View(context) {
         best = prefs.getInt("best", 0)
         totalGames = prefs.getInt("totalGames", 0)
         totalScore = prefs.getInt("totalScore", 0)
+        wallet = prefs.getInt("wallet", 0)
+        // Nạp danh sách skin đã mua
+        ownedSkins.clear()
+        ownedSkins.add(Skin.CLASSIC)
+        prefs.getStringSet("ownedSkins", emptySet())?.forEach { name ->
+            Skin.values().firstOrNull { it.name == name }?.let { ownedSkins.add(it) }
+        }
+        currentSkin = Skin.values().firstOrNull { it.name == prefs.getString("skin", "CLASSIC") } ?: Skin.CLASSIC
         soundManager.enabled = soundEnabled
     }
 
@@ -253,6 +275,9 @@ class GameView(context: Context) : View(context) {
             .putInt("best", best)
             .putInt("totalGames", totalGames)
             .putInt("totalScore", totalScore)
+            .putInt("wallet", wallet)
+            .putStringSet("ownedSkins", ownedSkins.map { it.name }.toSet())
+            .putString("skin", currentSkin.name)
             .apply()
     }
 
@@ -304,7 +329,7 @@ class GameView(context: Context) : View(context) {
         totalGames++
         totalScore += score
         if (score > best) best = score
-        saveSettings()
+        saveSettings()   // lưu cả wallet để xu nhặt được không mất
     }
 
     private fun flap() {
@@ -395,6 +420,7 @@ class GameView(context: Context) : View(context) {
             val dy = c.y - birdY
             if (!c.taken && dx * dx + dy * dy < (coinR + birdR * 0.7f) * (coinR + birdR * 0.7f)) {
                 coins++
+                wallet++          // Tích xu vào ví để mua skin
                 score += 2
                 playSound { soundManager.playPoint() }
                 spawnParticles(c.x, c.y, 12, Color.rgb(255, 210, 60), 70f * d, 260f * d, 4f * d)
@@ -486,9 +512,44 @@ class GameView(context: Context) : View(context) {
 
     private fun startRect(): RectF {
         val w = screenW * 0.64f
-        val h = 90f * d
+        val h = 84f * d
         val left = (screenW - w) / 2f
-        val top = screenH * 0.70f
+        val top = screenH * 0.645f
+        return RectF(left, top, left + w, top + h)
+    }
+
+    /** Nút mở cửa hàng skin ở sảnh chờ */
+    private fun shopBtnRect(): RectF {
+        val w = screenW * 0.52f
+        val h = 72f * d
+        val left = (screenW - w) / 2f
+        val top = screenH * 0.795f
+        return RectF(left, top, left + w, top + h)
+    }
+
+    /** Ô chọn skin trong cửa hàng (2 cột) */
+    private fun skinRect(i: Int): RectF {
+        val cols = 2
+        val w = screenW * 0.40f
+        val h = 96f * d
+        val gapX = screenW * 0.04f
+        val gapY = 14f * d
+        val totalW = w * cols + gapX
+        val left0 = (screenW - totalW) / 2f
+        val top0 = screenH * 0.24f
+        val col = i % cols
+        val row = i / cols
+        val left = left0 + col * (w + gapX)
+        val top = top0 + row * (h + gapY)
+        return RectF(left, top, left + w, top + h)
+    }
+
+    /** Nút quay lại sảnh từ cửa hàng */
+    private fun shopBackRect(): RectF {
+        val w = screenW * 0.52f
+        val h = 74f * d
+        val left = (screenW - w) / 2f
+        val top = screenH * 0.845f
         return RectF(left, top, left + w, top + h)
     }
 
@@ -545,7 +606,43 @@ class GameView(context: Context) : View(context) {
                         return true
                     }
                 }
-                if (startRect().contains(x, y)) startGame()
+                if (startRect().contains(x, y)) { startGame(); return true }
+                if (shopBtnRect().contains(x, y)) {
+                    state = GameState.SHOP
+                    playSound { soundManager.playPoint() }
+                    return true
+                }
+            }
+
+            GameState.SHOP -> {
+                // Chọn/mua skin
+                for (i in Skin.values().indices) {
+                    if (!skinRect(i).contains(x, y)) continue
+                    val sk = Skin.values()[i]
+                    if (ownedSkins.contains(sk)) {
+                        // Đã sở hữu -> trang bị
+                        currentSkin = sk
+                        saveSettings()
+                        playSound { soundManager.playPoint() }
+                    } else if (wallet >= sk.price) {
+                        // Đủ xu -> mua và trang bị luôn
+                        wallet -= sk.price
+                        ownedSkins.add(sk)
+                        currentSkin = sk
+                        saveSettings()
+                        playSound { soundManager.playPoint() }
+                        vibrate(40)
+                    } else {
+                        // Không đủ xu
+                        vibrate(25)
+                    }
+                    return true
+                }
+                if (shopBackRect().contains(x, y)) {
+                    state = GameState.MENU
+                    lastFrameTime = 0L
+                    return true
+                }
             }
 
             GameState.PLAYING -> flap()
@@ -575,6 +672,7 @@ class GameView(context: Context) : View(context) {
         when (state) {
             GameState.PLAYING -> update(dtMs)
             GameState.MENU -> updateMenu(dtMs)
+            GameState.SHOP -> updateMenu(dtMs)
             GameState.GAME_OVER -> updateFallingBird(dtMs)
         }
 
@@ -595,6 +693,7 @@ class GameView(context: Context) : View(context) {
 
         when (state) {
             GameState.MENU -> drawMenu(canvas)
+            GameState.SHOP -> drawShop(canvas)
             GameState.PLAYING -> drawHud(canvas)
             GameState.GAME_OVER -> {
                 drawHud(canvas)
@@ -767,6 +866,10 @@ class GameView(context: Context) : View(context) {
         c.save()
         c.rotate(birdAngle * 32f, birdX, birdY)
 
+        // Áp màu skin hiện tại
+        birdBodyPaint.color = currentSkin.body
+        birdWingPaint.color = currentSkin.wing
+
         // Cánh (vỗ theo birdFlap)
         val wingDy = (birdFlap * 2f - 1f) * r * 0.35f
         c.drawOval(
@@ -857,11 +960,86 @@ class GameView(context: Context) : View(context) {
         buttonTextPaint.textSize = 44f * d
         c.drawText("CHƠI", sr.centerX(), sr.centerY() + 16f * d, buttonTextPaint)
 
+        // Nút cửa hàng skin
+        val shr = shopBtnRect()
+        buttonPaint.color = Color.argb(215, 255, 255, 255)
+        c.drawRoundRect(shr, 20f * d, 20f * d, buttonPaint)
+        c.drawRoundRect(shr, 20f * d, 20f * d, buttonBorderPaint)
+        buttonTextPaint.textSize = 30f * d
+        c.drawText("CỬA HÀNG", shr.centerX(), shr.centerY() + 10f * d, buttonTextPaint)
+
         // Thành tích
-        smallPaint.textSize = 30f * d
-        c.drawText("KỶ LỤC: $best", screenW / 2f, screenH * 0.90f, smallPaint)
-        smallPaint.textSize = 23f * d
-        c.drawText("Chạm để vỗ cánh khi đang chơi", screenW / 2f, screenH * 0.95f, smallPaint)
+        smallPaint.textSize = 27f * d
+        c.drawText("KỶ LỤC: $best", screenW / 2f, screenH * 0.905f, smallPaint)
+        smallPaint.textSize = 22f * d
+        c.drawText("Chạm để vỗ cánh khi đang chơi", screenW / 2f, screenH * 0.955f, smallPaint)
+    }
+
+    // ---------- Cửa hàng skin ----------
+    private fun drawShop(c: Canvas) {
+        // Lớp phủ tối
+        overlayPaint.color = Color.argb(150, 0, 0, 0)
+        c.drawRect(0f, 0f, screenW, screenH, overlayPaint)
+
+        // Tiêu đề
+        titlePaint.textSize = 58f * d
+        c.drawText("CỬA HÀNG", screenW / 2f, screenH * 0.11f, titlePaint)
+
+        // Ví xu
+        smallPaint.textAlign = Paint.Align.LEFT
+        smallPaint.textSize = 32f * d
+        coinPaint.color = Color.rgb(255, 205, 45)
+        c.drawCircle(34f * d, screenH * 0.165f, 14f * d, coinPaint)
+        c.drawText("VÍ: $wallet xu", 58f * d, screenH * 0.178f, smallPaint)
+        smallPaint.textAlign = Paint.Align.CENTER
+
+        // Danh sách skin
+        for (i in Skin.values().indices) {
+            val skin = Skin.values()[i]
+            val r = skinRect(i)
+            val owned = ownedSkins.contains(skin)
+            val selected = currentSkin == skin
+
+            // Nền ô
+            buttonPaint.color = if (selected) Color.argb(235, 255, 214, 90)
+                                else Color.argb(215, 250, 250, 250)
+            c.drawRoundRect(r, 16f * d, 16f * d, buttonPaint)
+            c.drawRoundRect(r, 16f * d, 16f * d, buttonBorderPaint)
+
+            // Chim mini xem trước
+            birdBodyPaint.color = skin.body
+            birdWingPaint.color = skin.wing
+            c.drawCircle(r.left + 34f * d, r.centerY(), 20f * d, birdBodyPaint)
+            c.drawCircle(r.left + 34f * d, r.centerY(), 20f * d, birdOutlinePaint)
+            c.drawCircle(r.left + 42f * d, r.centerY() - 6f * d, 7f * d, birdEyePaint)
+            c.drawCircle(r.left + 44f * d, r.centerY() - 6f * d, 3f * d, birdPupilPaint)
+
+            // Tên skin
+            smallPaint.textAlign = Paint.Align.LEFT
+            smallPaint.textSize = 22f * d
+            smallPaint.color = Color.rgb(50, 50, 50)
+            c.drawText(skin.label, r.left + 62f * d, r.centerY() - 4f * d, smallPaint)
+
+            // Trạng thái
+            smallPaint.textSize = 19f * d
+            smallPaint.color = if (selected) Color.rgb(30, 110, 30) else Color.rgb(110, 110, 110)
+            val status = when {
+                selected -> "ĐANG DÙNG"
+                owned -> "CHỌN"
+                else -> "${skin.price} xu"
+            }
+            c.drawText(status, r.left + 62f * d, r.centerY() + 22f * d, smallPaint)
+            smallPaint.color = Color.WHITE
+            smallPaint.textAlign = Paint.Align.CENTER
+        }
+
+        // Nút quay lại
+        val br = shopBackRect()
+        buttonPaint.color = Color.argb(220, 245, 245, 245)
+        c.drawRoundRect(br, 20f * d, 20f * d, buttonPaint)
+        c.drawRoundRect(br, 20f * d, 20f * d, buttonBorderPaint)
+        buttonTextPaint.textSize = 30f * d
+        c.drawText("QUAY LẠI", br.centerX(), br.centerY() + 10f * d, buttonTextPaint)
     }
 
     // ---------- Màn hình kết thúc ----------
