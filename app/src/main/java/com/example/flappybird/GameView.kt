@@ -142,6 +142,10 @@ class GameView(context: Context) : View(context) {
     private val birdOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(180, 130, 20); style = Paint.Style.STROKE; strokeWidth = 3f * d
     }
+    // Các lớp phụ trợ để tạo khối và độ bóng cho chim
+    private val birdHighlightPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val birdShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val birdBlushPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     private val coinPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 205, 45) }
     private val coinBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -870,28 +874,74 @@ class GameView(context: Context) : View(context) {
         birdBodyPaint.color = currentSkin.body
         birdWingPaint.color = currentSkin.wing
 
-        // Cánh (vỗ theo birdFlap)
-        val wingDy = (birdFlap * 2f - 1f) * r * 0.35f
-        c.drawOval(
-            RectF(birdX - r * 1.05f, birdY - r * 0.35f + wingDy, birdX + r * 0.25f, birdY + r * 0.55f + wingDy),
-            birdWingPaint
-        )
+        // Màu phụ trợ cho khối bóng và má hồng
+        birdHighlightPaint.color = Color.argb(115, 255, 255, 255)
+        birdShadowPaint.color = Color.argb(45, 0, 0, 0)
+        birdBlushPaint.color = Color.argb(85, 255, 120, 120)
 
-        // Thân
+        // Đuôi chim phía sau thân
+        val tail = android.graphics.Path()
+        tail.moveTo(birdX - r * 0.70f, birdY - r * 0.16f)
+        tail.lineTo(birdX - r * 1.46f, birdY - r * 0.52f)
+        tail.lineTo(birdX - r * 1.26f, birdY + r * 0.02f)
+        tail.lineTo(birdX - r * 1.50f, birdY + r * 0.48f)
+        tail.lineTo(birdX - r * 0.64f, birdY + r * 0.34f)
+        tail.close()
+        c.drawPath(tail, birdWingPaint)
+        c.drawPath(tail, birdOutlinePaint)
+
+        // Thân kèm bóng đổ nhẹ phía dưới
+        c.drawOval(RectF(birdX - r * 0.92f, birdY - r * 0.08f, birdX + r * 0.92f, birdY + r * 1.04f), birdShadowPaint)
         c.drawCircle(birdX, birdY, r, birdBodyPaint)
+        // Vùng sáng phía trên tạo khối bóng tròn
+        c.drawOval(RectF(birdX - r * 0.74f, birdY - r * 0.93f, birdX + r * 0.34f, birdY - r * 0.08f), birdHighlightPaint)
         c.drawCircle(birdX, birdY, r, birdOutlinePaint)
 
-        // Mắt
-        c.drawCircle(birdX + r * 0.42f, birdY - r * 0.32f, r * 0.34f, birdEyePaint)
-        c.drawCircle(birdX + r * 0.50f, birdY - r * 0.30f, r * 0.16f, birdPupilPaint)
+        // Cánh vỗ: xoay quanh khớp cánh theo nhịp vỗ
+        val wingAngle = -38f + birdFlap * 78f
+        c.save()
+        c.rotate(wingAngle, birdX - r * 0.10f, birdY + r * 0.10f)
+        val wing = android.graphics.Path()
+        wing.moveTo(birdX - r * 0.02f, birdY - r * 0.10f)
+        wing.quadTo(birdX - r * 0.90f, birdY - r * 0.42f, birdX - r * 1.24f, birdY + r * 0.10f)
+        wing.quadTo(birdX - r * 0.86f, birdY + r * 0.46f, birdX - r * 0.02f, birdY + r * 0.34f)
+        wing.close()
+        c.drawPath(wing, birdWingPaint)
+        c.drawPath(wing, birdOutlinePaint)
+        // Vệt sáng trên cánh
+        val wingInner = android.graphics.Path()
+        wingInner.moveTo(birdX - r * 0.12f, birdY + r * 0.02f)
+        wingInner.quadTo(birdX - r * 0.72f, birdY - r * 0.20f, birdX - r * 0.96f, birdY + r * 0.14f)
+        wingInner.quadTo(birdX - r * 0.70f, birdY + r * 0.30f, birdX - r * 0.12f, birdY + r * 0.22f)
+        wingInner.close()
+        c.drawPath(wingInner, birdHighlightPaint)
+        c.restore()
 
-        // Mỏ
-        val beak = android.graphics.Path()
-        beak.moveTo(birdX + r * 0.82f, birdY + r * 0.02f)
-        beak.lineTo(birdX + r * 1.45f, birdY + r * 0.20f)
-        beak.lineTo(birdX + r * 0.82f, birdY + r * 0.40f)
-        beak.close()
-        c.drawPath(beak, birdBeakPaint)
+        // Mắt
+        c.drawCircle(birdX + r * 0.40f, birdY - r * 0.34f, r * 0.36f, birdEyePaint)
+        c.drawCircle(birdX + r * 0.40f, birdY - r * 0.34f, r * 0.36f, birdOutlinePaint)
+        c.drawCircle(birdX + r * 0.52f, birdY - r * 0.30f, r * 0.17f, birdPupilPaint)
+        c.drawCircle(birdX + r * 0.46f, birdY - r * 0.37f, r * 0.06f, birdEyePaint)
+
+        // Mỏ trên và mỏ dưới tách rời, hở ra theo nhịp vỗ cánh
+        val mouthOpen = (1f - birdFlap) * r * 0.10f
+        val beakTop = android.graphics.Path()
+        beakTop.moveTo(birdX + r * 0.72f, birdY - r * 0.04f)
+        beakTop.lineTo(birdX + r * 1.42f, birdY + r * 0.14f)
+        beakTop.lineTo(birdX + r * 0.74f, birdY + r * 0.16f)
+        beakTop.close()
+        c.drawPath(beakTop, birdBeakPaint)
+        c.drawPath(beakTop, birdOutlinePaint)
+
+        val beakBottom = android.graphics.Path()
+        beakBottom.moveTo(birdX + r * 0.74f, birdY + r * 0.18f)
+        beakBottom.lineTo(birdX + r * 1.30f, birdY + r * 0.26f + mouthOpen)
+        beakBottom.lineTo(birdX + r * 0.74f, birdY + r * 0.46f)
+        beakBottom.close()
+        c.drawPath(beakBottom, birdBeakPaint)
+
+        // Má hồng cho dễ thương
+        c.drawCircle(birdX + r * 0.26f, birdY + r * 0.30f, r * 0.14f, birdBlushPaint)
 
         c.restore()
     }
