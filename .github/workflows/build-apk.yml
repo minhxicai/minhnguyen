@@ -14,18 +14,17 @@ jobs:
           java-version: '17'
       - name: Build Android APK
         run: |
+          set -e
           cd android
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          if [ -f "./gradlew" ]; then
-            chmod +x gradlew
-            ./gradlew assembleDebug --no-daemon
-          else
-            gradle wrapper --gradle-version 8.7
-            chmod +x gradlew
-            ./gradlew assembleDebug --no-daemon
-          fi
-      - uses: actions/upload-artifact@v4
-        if: success()
+          curl -sSLo /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          export PATH="/tmp/gradle-dist/gradle-8.7/bin:$PATH"
+          gradle --version
+          gradle assembleDebug --no-daemon --stacktrace
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: |
