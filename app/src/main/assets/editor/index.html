@@ -46,7 +46,7 @@
 
   // ===== DANH SÁCH THẺ HTML GỢI Ý =====
   var TAG_HINTS = [
-    { text: '<html>', displayText: '<html> ... </html> (khung trang)' },
+    { text: '<html>', displayText: '<html> → chèn khung trang đầy đủ (DOCTYPE, head, body)' },
     { text: '<head>', displayText: '<head>' },
     { text: '<body>', displayText: '<body>' },
     { text: '<title>', displayText: '<title>' },
@@ -120,32 +120,29 @@
     }
   });
 
-  // Tự động chèn khung HTML khi gõ thẻ <html>
-  var htmlSnippetDone = false;
-  var HTML_SKELETON = '<html>\n<head>\n  <meta charset="UTF-8">\n  <title>My Page</title>\n</head>\n<body>\n\n</body>\n</html>';
+  // Tự động chèn khung HTML đầy đủ khi gõ thẻ <html>
+  var HTML_SKELETON = '<!DOCTYPE html>\n<html>\n<head>\n<title>Tên Của Trang Web</title>\n</head>\n<body>\n<p>Nội Dung Của Trang Web</p>\n</body>\n</html>';
 
   cm.on('change', function(cmInstance, change) {
     if (change.origin === 'setValue') return;
     var text = change.text.join('\n');
-    // Nếu vừa gõ xong '<html>' gần nhất
-    if (/<html>\s*$/i.test(text) || /<html>$/.test(text)) {
+    // Nếu vừa gõ xong '<html>' tại vị trí con trỏ
+    if (/<html>\s*$/i.test(text)) {
       var cur = cmInstance.getCursor();
-      var doc = cmInstance.getValue();
-      var before = doc.slice(0, cmInstance.indexFromPos(cur));
-      // Chỉ chèn khi <html> nằm ở đầu tài liệu (khung chính)
-      if (/^\s*<html>\s*$/im.test(before.trim().slice(-6)) || before.trim() === '<html>') {
-        // Xoá '<html>' vừa gõ và chèn khung hoàn chỉnh
+      var before = cmInstance.getRange(CodeMirror.Pos(0, 0), cur);
+      // Chỉ chèn khi <html> là nội dung chính (tài liệu gần như trống)
+      if (before.replace(/<html>\s*$/i, '').trim() === '') {
+        // Thay đoạn '<html>' vừa gõ bằng khung hoàn chỉnh
         cmInstance.replaceRange(HTML_SKELETON,
           CodeMirror.Pos(cur.line, cur.ch - 6), cur);
-        // Đặt con trỏ vào trong <body>
+        // Đặt con trỏ vào trong <title>
         var full = cmInstance.getValue();
-        var bodyIdx = full.indexOf('<body>');
-        if (bodyIdx >= 0) {
-          var upto = full.slice(0, bodyIdx + 6);
+        var tIdx = full.indexOf('Tên Của Trang Web');
+        if (tIdx >= 0) {
+          var upto = full.slice(0, tIdx);
           var lines = upto.split('\n');
           cmInstance.setCursor(CodeMirror.Pos(lines.length - 1, lines[lines.length - 1].length));
         }
-        htmlSnippetDone = true;
       }
     }
   });
