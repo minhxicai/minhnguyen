@@ -127,6 +127,7 @@ public class MainActivity extends AppCompatActivity {
         popup.getMenu().add(0, 4, 3, "Lưu cả 2 file HTML và CSS");
         popup.getMenu().add(0, 5, 4, "Mở file HTML (.html)");
         popup.getMenu().add(0, 6, 5, "Mở file CSS (.css)");
+        popup.getMenu().add(0, 7, 6, "Mở trang hoàn chỉnh (tự tách CSS)");
         popup.setOnMenuItemClickListener(item -> {
             switch (item.getItemId()) {
                 case 1:
@@ -147,6 +148,9 @@ public class MainActivity extends AppCompatActivity {
                     return true;
                 case 6:
                     openFileDialog(REQ_OPEN_CSS);
+                    return true;
+                case 7:
+                    openFileDialog(REQ_OPEN_FULL);
                     return true;
             }
             return false;
@@ -220,6 +224,21 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         final Uri uri = data.getData();
+        // Xử lý mở trang hoàn chỉnh: tự tách thẻ <style> thành tab CSS
+        if (requestCode == REQ_OPEN_FULL) {
+            String content = readTextFromUri(uri);
+            if (content == null) {
+                Toast.makeText(this, "Không đọc được file", Toast.LENGTH_LONG).show();
+                return;
+            }
+            String[] parts = splitHtmlCss(content);
+            htmlContent = parts[0];
+            cssContent = parts[1];
+            loadCurrentIntoEditor();
+            persistAll();
+            Toast.makeText(this, "Đã mở trang và tách CSS", Toast.LENGTH_SHORT).show();
+            return;
+        }
         // Xử lý mở/đọc file HTML hoặc CSS
         if (requestCode == REQ_OPEN_HTML || requestCode == REQ_OPEN_CSS) {
             String content = readTextFromUri(uri);
@@ -263,6 +282,24 @@ public class MainActivity extends AppCompatActivity {
                 saveFileDialog(REQ_SAVE_CSS);
             }
         });
+    }
+
+    // Tách nội dung trang hoàn chỉnh thành [phần HTML, phần CSS trong thẻ <style>]
+    // Dùng biểu thức đơn giản để lấy khối <style>...</style> đầu tiên
+    private String[] splitHtmlCss(String full) {
+        String css = "";
+        String html = full;
+        try {
+            java.util.regex.Pattern p = java.util.regex.Pattern.compile(
+                "(?is)<style[^>]*>(.*?)</style>");
+            java.util.regex.Matcher m = p.matcher(full);
+            if (m.find()) {
+                css = m.group(1).trim();
+                // Xóa khối <style>...</style> đầu tiên khỏi phần HTML
+                html = new StringBuilder(full).delete(m.start(), m.end()).toString().trim();
+            }
+        } catch (Exception ignored) { }
+        return new String[] { html, css };
     }
 
     // Lấy nội dung mới nhất của tab đang mở rồi trả cả 2 nội dung
