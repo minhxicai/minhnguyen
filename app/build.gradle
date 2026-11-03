@@ -24,6 +24,13 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+
+    // Đổi tên file APK debug/release thành Code Html CSS
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            outputFileName = "Code Html CSS.apk"
+        }
+    }
 }
 
 dependencies {

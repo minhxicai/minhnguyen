@@ -18,6 +18,8 @@ import androidx.core.content.FileProvider;
 
 import android.widget.PopupMenu;
 
+import org.json.JSONTokener;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
@@ -348,29 +350,16 @@ public class MainActivity extends AppCompatActivity {
 
     private String unquoteJS(String jsValue) {
         if (jsValue == null || jsValue.equals("null")) return "";
-        // evaluateJavascript trả về JSON string, ví dụ "\"abc\""
-        if (jsValue.length() >= 2 && jsValue.charAt(0) == '"') {
-            jsValue = jsValue.substring(1, jsValue.length() - 1);
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < jsValue.length(); i++) {
-                char c = jsValue.charAt(i);
-                if (c == '\\' && i + 1 < jsValue.length()) {
-                    char n = jsValue.charAt(++i);
-                    switch (n) {
-                        case 'n': sb.append('\n'); break;
-                        case 'r': sb.append('\r'); break;
-                        case 't': sb.append('\t'); break;
-                        case '"': sb.append('"'); break;
-                        case '\\': sb.append('\\'); break;
-                        default: sb.append(n);
-                    }
-                } else {
-                    sb.append(c);
-                }
+        try {
+            Object decoded = new JSONTokener(jsValue).nextValue();
+            return decoded.toString();
+        } catch (Exception e) {
+            if (jsValue.length() >= 2 && jsValue.charAt(0) == '"' 
+                    && jsValue.charAt(jsValue.length() - 1) == '"') {
+                return jsValue.substring(1, jsValue.length() - 1);
             }
-            return sb.toString();
+            return jsValue;
         }
-        return jsValue;
     }
 
     @Override
