@@ -325,6 +325,22 @@
     setTimeout(function() { cmInstance.focus(); }, 50);
   }
 
+  // ===== FIX LỖI U003C: bàn phím ảo Android đôi khi gửi '<' dưới dạng chuỗi '\u003C'/'U003C' =====
+  cm.on('change', function(cmInstance, change) {
+    if (!change.text) return;
+    var joined = change.text.join('\n');
+    if (joined.indexOf('\\u003C') === -1 && joined.indexOf('U003C') === -1) return;
+    var fixed = joined
+      .replace(/\\u003C/gi, '<')
+      .replace(/(^|[^A-Za-z0-9])U003C/gi, '$1<');
+    cmInstance.replaceRange(
+      fixed,
+      change.from,
+      change.to,
+      '+fixU003C'
+    );
+  });
+
   cm.on('change', function(cmInstance, change) {
     if (change.origin === '+skeleton' || change.origin === 'setValue') return;
     // Chờ 10ms cho autoCloseTags hoàn tất, sau đó kiểm tra
@@ -340,15 +356,22 @@
     }, 10);
   });
 
+  // Làm sạch chuỗi: bàn phím ảo Android đôi khi gửi '<' thành '\u003C'/'U003C'
+  function sanitizeU003C(s) {
+    return (s || '')
+      .replace(/\\u003C/gi, '<')
+      .replace(/(^|[^A-Za-z0-9])U003C/g, '$1<');
+  }
+
   // Đặt nội dung từ app truyền vào
   window.setCode = function(value, mode) {
     cm.setOption('mode', mode || 'htmlmixed');
-    cm.setValue(value || '');
+    cm.setValue(sanitizeU003C(value));
   };
 
   // Lấy nội dung ra để app đọc
   window.getCode = function() {
-    return cm.getValue();
+    return sanitizeU003C(cm.getValue());
   };
 
   // Lắng nghe thay đổi -> báo lên app để auto-save
