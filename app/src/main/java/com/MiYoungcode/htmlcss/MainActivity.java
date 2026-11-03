@@ -16,8 +16,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 import androidx.core.content.FileProvider;
 
+import android.widget.PopupMenu;
+
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 
 public class MainActivity extends AppCompatActivity {
@@ -30,6 +33,7 @@ public class MainActivity extends AppCompatActivity {
     private WebView webEditor;
     private TextView tabHtml, tabCss, tvTitle;
     private Button btnRun;
+    private TextView btnMenu;
     private SharedPreferences prefs;
 
     // Tài liệu hiện tại
@@ -37,6 +41,19 @@ public class MainActivity extends AppCompatActivity {
     private String cssContent = "";
     private boolean isShowingCss = false;
     private boolean editorReady = false;
+
+    // Mã yêu cầu SAF khi lưu file
+    private static final int REQ_SAVE_HTML = 1001;
+    private static final int REQ_SAVE_CSS = 1002;
+    private static final int REQ_SAVE_FULL = 1003;
+
+    // Cờ: đang lưu HTML thì sau đó hỏi lưu tiếp CSS
+    private boolean pendingSaveCss = false;
+
+    // Callback trả nội dung mới nhất của cả 2 tab
+    private interface ContentCallback {
+        void onContent(String html, String css);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,6 +67,7 @@ public class MainActivity extends AppCompatActivity {
         tabCss = findViewById(R.id.tabCss);
         tvTitle = findViewById(R.id.tvTitle);
         btnRun = findViewById(R.id.btnRun);
+        btnMenu = findViewById(R.id.btnMenu);
 
         // Khôi phục tiến trình đã lưu
         htmlContent = prefs.getString(KEY_HTML, defaultHtml());
@@ -87,6 +105,119 @@ public class MainActivity extends AppCompatActivity {
         tabHtml.setOnClickListener(v -> switchTab(false));
         tabCss.setOnClickListener(v -> switchTab(true));
         btnRun.setOnClickListener(v -> runInChrome());
+        btnMenu.setOnClickListener(this::showSaveMenu);
+    }
+
+    // ===== Menu 3 gạch (góc trái) chứa các tác vụ lưu file =====
+    private void showSaveMenu(View anchor) {
+        PopupMenu popup = new PopupMenu(this, anchor);
+        popup.getMenu().add(0, 1, 0, "Lưu index.html (mã HTML)");
+        popup.getMenu().add(0, 2, 1, "Lưu style.css (mã CSS)");
+        popup.getMenu().add(0, 3, 2, "Lưu trang hoàn chỉnh (HTML + CSS)");
+        popup.getMenu().add(0, 4, 3, "Lưu cả 2 file HTML và CSS");
+        popup.setOnMenuItemClickListener(item -> {
+            switch (item.getItemId()) {
+                case 1:
+                    saveFileDialog(REQ_SAVE_HTML);
+                    return true;
+                case 2:
+                    saveFileDialog(REQ_SAVE_CSS);
+                    return true;
+                case 3:
+                    saveFileDialog(REQ_SAVE_FULL);
+                    return true;
+                case 4:
+                    pendingSaveCss = true;
+                    saveFileDialog(REQ_SAVE_HTML);
+                    return true;
+            }
+            return false;
+        });
+        popup.show();
+    }
+
+    // Mở hộp thoại chọn nơi lưu file (SAF - không cần xin quyền)
+    private void saveFileDialog(int type) {
+        Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        if (type == REQ_SAVE_CSS) {
+            i.setType("text/css");
+            i.putExtra(Intent.EXTRA_TITLE, "style.css");
+        } else if (type == REQ_SAVE_HTML) {
+            i.setType("text/html");
+            i.putExtra(Intent.EXTRA_TITLE, "index.html");
+        } else {
+            i.setType("text/html");
+            i.putExtra(Intent.EXTRA_TITLE, "page.html");
+        }
+        try {
+            startActivityForResult(i, type);
+        } catch (Exception e) {
+            Toast.makeText(this, "Không mở được trình lưu file: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+            pendingSaveCss = false;
+            return;
+        }
+        final Uri uri = data.getData();
+        withFreshContent((html, css) -> {
+            String text;
+            String label;
+            if (requestCode == REQ_SAVE_CSS) {
+                text = css;
+                label = "style.css";
+            } else if (requestCode == REQ_SAVE_HTML) {
+                text = html;
+                label = "index.html";
+            } else {
+                text = buildFullHtml(html, css);
+                label = "trang hoàn chỉnh";
+            }
+            if (writeTextToUri(uri, text)) {
+                Toast.makeText(this, "Đã lưu " + label, Toast.LENGTH_SHORT).show();
+            }
+            // Nếu chọn "lưu cả 2 file" thì hỏi tiếp vị trí lưu CSS
+            if (pendingSaveCss) {
+                pendingSaveCss = false;
+                saveFileDialog(REQ_SAVE_CSS);
+            }
+        });
+    }
+
+    // Lấy nội dung mới nhất của tab đang mở rồi trả cả 2 nội dung
+    private void withFreshContent(ContentCallback callback) {
+        if (!editorReady) {
+            callback.onContent(htmlContent, cssContent);
+            return;
+        }
+        webEditor.evaluateJavascript("window.getCode()", value -> {
+            String code = unquoteJS(value);
+            if (isShowingCss) {
+                cssContent = code;
+            } else {
+                htmlContent = code;
+            }
+            persistAll();
+            callback.onContent(htmlContent, cssContent);
+        });
+    }
+
+    // Ghi nội dung UTF-8 vào Uri do người dùng chọn
+    private boolean writeTextToUri(Uri uri, String text) {
+        try (OutputStream os = getContentResolver().openOutputStream(uri, "wt")) {
+            if (os == null) throw new Exception("không mở được file");
+            os.write((text == null ? "" : text).getBytes("UTF-8"));
+            os.flush();
+            return true;
+        } catch (Exception e) {
+            Toast.makeText(this, "Lỗi lưu file: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            return false;
+        }
     }
 
     // Chuyển tab HTML / CSS
@@ -173,9 +304,12 @@ public class MainActivity extends AppCompatActivity {
 
     // Ghép HTML + CSS thành 1 trang hoàn chỉnh
     private String buildFullHtml() {
-        String bodyHtml = htmlContent;
+        return buildFullHtml(htmlContent, cssContent);
+    }
+
+    private String buildFullHtml(String bodyHtml, String css) {
         // nếu người dùng đã có thẻ <html> hoàn chỉnh thì chèn CSS vào <head>
-        String cssTag = "<style>\n" + cssContent + "\n</style>";
+        String cssTag = "<style>\n" + css + "\n</style>";
         if (bodyHtml.toLowerCase().contains("<head>")) {
             return bodyHtml.replaceFirst("(?i)<head>", "<head>\n" + cssTag + "\n");
         }

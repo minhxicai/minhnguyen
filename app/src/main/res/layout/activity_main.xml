@@ -14,6 +14,22 @@
         android:padding="8dp"
         android:gravity="center_vertical">
 
+        <!-- Nút 3 gạch (menu) ở góc trái -->
+        <TextView
+            android:id="@+id/btnMenu"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="☰"
+            android:textSize="22sp"
+            android:textColor="#FFFFFF"
+            android:paddingStart="8dp"
+            android:paddingEnd="14dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="Mở menu lưu file"/>
+
         <TextView
             android:id="@+id/tvTitle"
             android:layout_width="0dp"
