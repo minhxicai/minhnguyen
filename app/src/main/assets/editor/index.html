@@ -18,7 +18,8 @@
 <style>
   html, body { margin:0; padding:0; height:100%; background:#1E1E1E; overflow:hidden; }
   .CodeMirror { height:100%; font-size:14px; font-family: 'Menlo','Consolas',monospace; }
-  .CodeMirror-hints { background:#252526; border:1px solid #3C3C3C; color:#D4D4D4; }
+  .CodeMirror-hints { background:#252526; border:1px solid #3C3C3C; color:#D4D4D4; max-height:180px !important; overflow-y:auto; z-index:99999; font-size:13px; }
+  .CodeMirror-hint { padding:6px 10px; max-width:88vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .CodeMirror-hint-active { background:#0E639C !important; color:#fff !important; }
 
   /* ===== Khung nhỏ chọn thẻ HTML ===== */
@@ -270,8 +271,8 @@
   }
 
   // Ghi đè hành vi hoàn thành: chèn cặp thẻ mở/đóng
-  cm.on('inputRead', function(cmInstance, change) {
-    if (change.text[0] === '<') {
+  function maybeShowTagHint(cmInstance, typedText) {
+    if (typedText && typedText.indexOf('<') !== -1) {
       cmInstance.showHint({
         hint: htmlTagHint,
         completeSingle: false,
@@ -280,6 +281,31 @@
     } else if (cmInstance.state.completionActive) {
       // Cập nhật danh sách khi đang gõ tiếp
       cmInstance.state.completionActive.update({ hint: htmlTagHint });
+    }
+  }
+
+  // Cách 1: sự kiện inputRead (bàn phím desktop / nhập trực tiếp)
+  cm.on('inputRead', function(cmInstance, change) {
+    maybeShowTagHint(cmInstance, change.text && change.text.join(''));
+  });
+
+  // Cách 2 (dự phòng cho bàn phím ảo Android dùng Gboard/composition):
+  // sau mỗi lần nhả phím, kiểm tra ký tự ngay trước con trỏ có phải '<' không
+  cm.on('keyup', function(cmInstance, e) {
+    // Bỏ qua các phím điều hướng để không mở popup liên tục
+    if ([8,9,13,27,37,38,39,40,16,17,18,20,224].indexOf(e.keyCode) !== -1) return;
+    var cur = cmInstance.getCursor();
+    var line = cmInstance.getLine(cur.line) || '';
+    var before = line.charAt(cur.ch - 1);
+    var inTag = false;
+    // Đang ở trong thẻ (có '<' chưa đóng '>' phía trước)?
+    var lt = line.lastIndexOf('<', cur.ch - 1);
+    var gt = line.lastIndexOf('>', cur.ch - 1);
+    if (lt > gt) inTag = true;
+    if (before === '<' || (inTag && !cmInstance.state.completionActive)) {
+      if (!cmInstance.state.completionActive) {
+        maybeShowTagHint(cmInstance, before === '<' ? '<' : null);
+      }
     }
   });
 
