@@ -15,16 +15,76 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/xml-hint.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/html-hint.min.js"></script>
 <style>
-  html, body { margin:0; padding:0; height:100%; background:#1E1E1E; }
+  html, body { margin:0; padding:0; height:100%; background:#1E1E1E; overflow:hidden; }
   .CodeMirror { height:100%; font-size:14px; font-family: 'Menlo','Consolas',monospace; }
   .CodeMirror-hints { background:#252526; border:1px solid #3C3C3C; color:#D4D4D4; }
   .CodeMirror-hint-active { background:#0E639C !important; color:#fff !important; }
+
+  /* ===== Khung nhỏ chọn thẻ HTML ===== */
+  #tagPicker {
+    display: none;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    max-height: 46vh;
+    background: #252526;
+    border-top: 2px solid #0E639C;
+    box-shadow: 0 -6px 18px rgba(0,0,0,.6);
+    z-index: 9999;
+    display: none;
+    flex-direction: column;
+  }
+  #tagPicker.open { display: flex; }
+  #tpHead {
+    flex: 0 0 auto;
+    padding: 7px 10px;
+    font-size: 12px;
+    color: #9CDCFE;
+    background: #1F1F1F;
+    border-bottom: 1px solid #3C3C3C;
+    font-family: 'Menlo','Consolas',monospace;
+  }
+  #tpHead span.close {
+    float: right;
+    color: #E06C75;
+    padding: 0 6px;
+    font-weight: bold;
+  }
+  #tpList {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tp-item {
+    padding: 8px 10px;
+    border-bottom: 1px solid #333;
+    font-size: 13px;
+    line-height: 1.35;
+    cursor: pointer;
+  }
+  .tp-item:active { background: #0E639C; }
+  .tp-tag {
+    color: #4EC9B0;
+    font-family: 'Menlo','Consolas',monospace;
+    font-weight: bold;
+    display: block;
+  }
+  .tp-item:active .tp-tag { color: #fff; }
+  .tp-desc { color: #A8A8A8; font-size: 12px; display: block; }
+  .tp-empty { padding: 14px; color: #808080; font-size: 13px; text-align: center; }
 </style>
 </head>
 <body>
 <textarea id="code"></textarea>
+
+<!-- Khung nhỏ hiện danh sách thẻ -->
+<div id="tagPicker">
+  <div id="tpHead">
+    Chọn thẻ HTML (gõ tên để lọc) <span class="close" id="tpClose">✕</span>
+  </div>
+  <div id="tpList"></div>
+</div>
+
 <script>
   var cm = CodeMirror.fromTextArea(document.getElementById('code'), {
     lineNumbers: true,
@@ -36,89 +96,190 @@
     indentUnit: 2,
     tabSize: 2,
     extraKeys: {
-      "Ctrl-Space": "autocomplete",
-      "Tab": function(cm) {
-        if (cm.somethingSelected()) cm.indentSelection('add');
-        else cm.replaceSelection("  ");
+      "Tab": function(cmInstance) {
+        if (cmInstance.somethingSelected()) cmInstance.indentSelection('add');
+        else cmInstance.replaceSelection("  ");
       }
     }
   });
 
-  // ===== DANH SÁCH THẺ HTML GỢI Ý =====
-  var TAG_HINTS = [
-    { text: '<html>', displayText: '<html> → chèn khung trang đầy đủ (DOCTYPE, head, body)' },
-    { text: '<head>', displayText: '<head>' },
-    { text: '<body>', displayText: '<body>' },
-    { text: '<title>', displayText: '<title>' },
-    { text: '<meta>', displayText: '<meta charset="UTF-8">' },
-    { text: '<link>', displayText: '<link rel="stylesheet">' },
-    { text: '<script>', displayText: '<script>' },
-    { text: '<style>', displayText: '<style>' },
-    { text: '<div>', displayText: '<div>' },
-    { text: '<span>', displayText: '<span>' },
-    { text: '<p>', displayText: '<p>' },
-    { text: '<h1>', displayText: '<h1>' },
-    { text: '<h2>', displayText: '<h2>' },
-    { text: '<h3>', displayText: '<h3>' },
-    { text: '<a>', displayText: '<a href="">' },
-    { text: '<img>', displayText: '<img src="" alt="">' },
-    { text: '<ul>', displayText: '<ul>' },
-    { text: '<ol>', displayText: '<ol>' },
-    { text: '<li>', displayText: '<li>' },
-    { text: '<table>', displayText: '<table>' },
-    { text: '<tr>', displayText: '<tr>' },
-    { text: '<td>', displayText: '<td>' },
-    { text: '<th>', displayText: '<th>' },
-    { text: '<form>', displayText: '<form>' },
-    { text: '<input>', displayText: '<input type="text">' },
-    { text: '<button>', displayText: '<button>' },
-    { text: '<textarea>', displayText: '<textarea>' },
-    { text: '<select>', displayText: '<select>' },
-    { text: '<option>', displayText: '<option>' },
-    { text: '<label>', displayText: '<label>' },
-    { text: '<header>', displayText: '<header>' },
-    { text: '<footer>', displayText: '<footer>' },
-    { text: '<nav>', displayText: '<nav>' },
-    { text: '<section>', displayText: '<section>' },
-    { text: '<article>', displayText: '<article>' },
-    { text: '<br>', displayText: '<br>' },
-    { text: '<hr>', displayText: '<hr>' },
-    { text: '<strong>', displayText: '<strong>' },
-    { text: '<em>', displayText: '<em>' }
+  // ===== DANH SÁCH ĐẦY ĐỦ CÁC THẺ HTML =====
+  var HTML_TAGS = [
+    { t:'a', d:'Định nghĩa một siêu liên kết.' },
+    { t:'abbr', d:'Định nghĩa dạng viết tắt của một từ hoặc cụm từ dài hơn.' },
+    { t:'acronym', d:'(Lỗi thời) Định nghĩa một từ viết tắt — dùng <abbr> thay thế.' },
+    { t:'address', d:'Chỉ định thông tin liên hệ của tác giả.' },
+    { t:'applet', d:'(Lỗi thời) Nhúng một applet Java — dùng <object> thay thế.' },
+    { t:'area', d:'Xác định một khu vực cụ thể trong bản đồ hình ảnh.' },
+    { t:'article', d:'Định nghĩa một bài viết.' },
+    { t:'aside', d:'Định nghĩa nội dung liên quan lỏng lẻo đến nội dung trang.' },
+    { t:'audio', d:'Nhúng âm thanh hoặc luồng âm thanh vào tài liệu HTML.' },
+    { t:'b', d:'Hiển thị văn bản ở dạng chữ đậm.' },
+    { t:'base', d:'Xác định URL cơ sở cho tất cả URL tương đối trong tài liệu.' },
+    { t:'basefont', d:'(Lỗi thời) Chỉ định phông chữ cơ bản — dùng CSS thay thế.' },
+    { t:'bdi', d:'Tách biệt đoạn văn bản khỏi văn bản xung quanh cho định dạng hai chiều.' },
+    { t:'bdo', d:'Ghi đè lên hướng văn bản hiện tại.' },
+    { t:'big', d:'(Lỗi thời) Hiển thị văn bản kích thước lớn — dùng CSS thay thế.' },
+    { t:'blockquote', d:'Đoạn văn được trích dẫn từ một nguồn khác.' },
+    { t:'body', d:'Xác định nội dung chính của tài liệu.' },
+    { t:'br', d:'Tạo một dấu xuống dòng.' },
+    { t:'button', d:'Tạo một nút có thể nhấp chuột.' },
+    { t:'canvas', d:'Vùng trong tài liệu dùng để vẽ đồ họa bằng JavaScript.' },
+    { t:'caption', d:'Xác định tiêu đề hoặc chú thích của bảng.' },
+    { t:'center', d:'(Lỗi thời) Căn chỉnh nội dung vào giữa — dùng CSS thay thế.' },
+    { t:'cite', d:'Chỉ dẫn một trích dẫn hoặc tham khảo từ nguồn khác.' },
+    { t:'code', d:'Chỉ định văn bản dưới dạng mã máy tính.' },
+    { t:'col', d:'Xác định thuộc tính cho một hoặc nhiều cột trong bảng.' },
+    { t:'colgroup', d:'Chỉ định thuộc tính cho nhiều cột trong một bảng.' },
+    { t:'data', d:'Liên kết nội dung với bản dịch đọc được bằng máy.' },
+    { t:'datalist', d:'Tập hợp các tùy chọn định trước cho phần tử <input>.' },
+    { t:'dd', d:'Mô tả hoặc giá trị cho thuật ngữ <dt> trong danh sách mô tả.' },
+    { t:'del', d:'Biểu thị đoạn văn bản đã bị xóa khỏi tài liệu.' },
+    { t:'details', d:'Tiện ích cho phép người dùng mở thông tin bổ sung theo yêu cầu.' },
+    { t:'dfn', d:'Xác định một định nghĩa.' },
+    { t:'dialog', d:'Xác định một hộp thoại hoặc cửa sổ con.' },
+    { t:'dir', d:'(Lỗi thời) Danh sách thư mục — dùng <ul> thay thế.' },
+    { t:'div', d:'Chỉ định một phân vùng hoặc một phần trong tài liệu.' },
+    { t:'dl', d:'Định nghĩa một danh sách mô tả.' },
+    { t:'dt', d:'Định nghĩa một thuật ngữ trong danh sách mô tả.' },
+    { t:'em', d:'Xác định văn bản được nhấn mạnh.' },
+    { t:'embed', d:'Nhúng ứng dụng bên ngoài (đa phương tiện) vào tài liệu HTML.' },
+    { t:'fieldset', d:'Chỉ định một tập hợp các trường biểu mẫu có liên quan.' },
+    { t:'figcaption', d:'Xác định chú thích hoặc mô tả cho hình ảnh.' },
+    { t:'figure', d:'Thể hiện một nhân vật được minh họa trong tài liệu.' },
+    { t:'font', d:'(Lỗi thời) Định kiểu chữ, màu, kích thước — dùng CSS thay thế.' },
+    { t:'footer', d:'Thể hiện phần chân trang của tài liệu hoặc một phần.' },
+    { t:'form', d:'Định nghĩa một biểu mẫu HTML để người dùng nhập dữ liệu.' },
+    { t:'frame', d:'(Lỗi thời) Xác định một khung hình trong một tập hợp khung.' },
+    { t:'frameset', d:'(Lỗi thời) Định nghĩa một tập hợp các khung hình.' },
+    { t:'h1', d:'Định nghĩa tiêu đề cấp 1 (lớn nhất).' },
+    { t:'h2', d:'Định nghĩa tiêu đề cấp 2.' },
+    { t:'h3', d:'Định nghĩa tiêu đề cấp 3.' },
+    { t:'h4', d:'Định nghĩa tiêu đề cấp 4.' },
+    { t:'h5', d:'Định nghĩa tiêu đề cấp 5.' },
+    { t:'h6', d:'Định nghĩa tiêu đề cấp 6 (nhỏ nhất).' },
+    { t:'head', d:'Phần đầu tài liệu chứa thông tin về tài liệu như tiêu đề.' },
+    { t:'header', d:'Đại diện cho phần đầu của tài liệu hoặc một phần.' },
+    { t:'hgroup', d:'Xác định một nhóm các tiêu đề.' },
+    { t:'hr', d:'Vẽ một đường thẳng nằm ngang.' },
+    { t:'html', d:'Xác định thư mục gốc của một tài liệu HTML (chèn khung trang đầy đủ).' },
+    { t:'i', d:'Hiển thị văn bản theo kiểu chữ nghiêng.' },
+    { t:'iframe', d:'Hiển thị URL trong khung nội tuyến.' },
+    { t:'img', d:'Biểu thị một hình ảnh.' },
+    { t:'input', d:'Định nghĩa một điều khiển đầu vào.' },
+    { t:'ins', d:'Xác định một khối văn bản đã được chèn vào tài liệu.' },
+    { t:'kbd', d:'Chỉ định văn bản làm đầu vào bàn phím.' },
+    { t:'keygen', d:'Cơ chế điều khiển tạo cặp khóa công khai–riêng tư.' },
+    { t:'label', d:'Xác định nhãn cho một điều khiển <input>.' },
+    { t:'legend', d:'Xác định chú thích cho phần tử <fieldset>.' },
+    { t:'li', d:'Xác định một mục trong danh sách.' },
+    { t:'link', d:'Xác định mối quan hệ với một nguồn tài nguyên bên ngoài.' },
+    { t:'main', d:'Thể hiện nội dung chính hoặc nổi bật của tài liệu.' },
+    { t:'map', d:'Định nghĩa một image-map phía máy khách.' },
+    { t:'mark', d:'Đoạn văn bản được tô sáng để tham khảo.' },
+    { t:'menu', d:'Thể hiện danh sách các lệnh.' },
+    { t:'menuitem', d:'Định nghĩa một mục lệnh mà người dùng có thể thực hiện.' },
+    { t:'meta', d:'Cung cấp siêu dữ liệu có cấu trúc về tài liệu.' },
+    { t:'meter', d:'Biểu thị một giá trị đo trong một phạm vi đã biết.' },
+    { t:'nav', d:'Xác định một phần các liên kết điều hướng.' },
+    { t:'noframes', d:'(Lỗi thời) Nội dung thay thế cho trình duyệt không hỗ trợ frame.' },
+    { t:'noscript', d:'Nội dung thay thế hiển thị khi trình duyệt không hỗ trợ script.' },
+    { t:'object', d:'Định nghĩa một đối tượng được nhúng.' },
+    { t:'ol', d:'Định nghĩa một danh sách có thứ tự.' },
+    { t:'optgroup', d:'Xác định một nhóm các tùy chọn trong danh sách chọn.' },
+    { t:'option', d:'Xác định một tùy chọn trong danh sách chọn.' },
+    { t:'output', d:'Kết quả của một phép tính hoặc hành động của người dùng.' },
+    { t:'p', d:'Định nghĩa một đoạn văn.' },
+    { t:'param', d:'(Lỗi thời) Xác định tham số cho phần tử <object>.' },
+    { t:'picture', d:'Chứa nhiều nguồn hình ảnh cho <img> Responsive.' },
+    { t:'pre', d:'Chỉ định văn bản được định dạng sẵn (giữ nguyên khoảng trắng).' },
+    { t:'progress', d:'Biểu thị tiến trình hoàn thành của một công việc.' },
+    { t:'q', d:'Định nghĩa một trích dẫn ngắn.' },
+    { t:'rp', d:'Nội dung dự phòng cho trình duyệt không hỗ trợ ruby.' },
+    { t:'rt', d:'Chú thích phát âm trong ký hiệu ruby.' },
+    { t:'ruby', d:'Chú thích phát âm cho chữ ký tự Trung/Nhật.' },
+    { t:'s', d:'Hiển thị văn bản không còn chính xác hoặc đã bị gạch ngang.' },
+    { t:'samp', d:'Chỉ định đầu ra mẫu từ chương trình máy tính.' },
+    { t:'script', d:'Nhúng hoặc tham chiếu mã script thực thi.' },
+    { t:'section', d:'Định nghĩa một phần trong tài liệu.' },
+    { t:'select', d:'Tạo một danh sách chọn (dropdown).' },
+    { t:'small', d:'Hiển thị văn bản cỡ nhỏ hơn.' },
+    { t:'source', d:'Xác định nhiều nguồn đa phương tiện cho <video>/<audio>.' },
+    { t:'span', d:'Nhóm các phần tử nội dòng để định kiểu.' },
+    { t:'strike', d:'(Lỗi thời) Văn bản gạch ngang — dùng <del>/<s> thay thế.' },
+    { t:'strong', d:'Xác định văn bản quan trọng (in đậm).' },
+    { t:'style', d:'Chứa mã CSS định kiểu cho tài liệu.' },
+    { t:'sub', d:'Hiển thị văn bản dạng chỉ số dưới.' },
+    { t:'summary', d:'Tiêu đề hiển thị cho phần tử <details>.' },
+    { t:'sup', d:'Hiển thị văn bản dạng chỉ số trên.' },
+    { t:'svg', d:'Nhúng đồ họa vector (SVG) vào tài liệu.' },
+    { t:'table', d:'Định nghĩa một bảng dữ liệu.' },
+    { t:'tbody', d:'Nhóm nội dung thân của bảng.' },
+    { t:'td', d:'Xác định một ô dữ liệu trong bảng.' },
+    { t:'template', d:'Khung nội dung ẩn dùng để sao chép bằng script.' },
+    { t:'textarea', d:'Tạo vùng nhập văn bản nhiều dòng.' },
+    { t:'tfoot', d:'Nhóm nội dung chân của bảng.' },
+    { t:'th', d:'Xác định ô tiêu đề (header) của bảng.' },
+    { t:'thead', d:'Nhóm nội dung tiêu đề của bảng.' },
+    { t:'time', d:'Biểu thị ngày/giờ (hoặc giá trị thời gian).' },
+    { t:'title', d:'Định nghĩa tiêu đề cho tài liệu (hiện trên tab trình duyệt).' },
+    { t:'tr', d:'Xác định một hàng ô trong bảng.' },
+    { t:'track', d:'Xác định rãnh phụ đề cho <audio>/<video>.' },
+    { t:'tt', d:'(Lỗi thời) Văn bản kiểu máy điện báo — dùng CSS thay thế.' },
+    { t:'u', d:'Hiển thị văn bản có gạch chân.' },
+    { t:'ul', d:'Định nghĩa một danh sách không có thứ tự.' },
+    { t:'var', d:'Định nghĩa một biến trong lập trình/toán học.' },
+    { t:'video', d:'Nhúng nội dung video vào tài liệu HTML.' },
+    { t:'wbr', d:'Biểu thị cơ hội xuống dòng hợp lý trong từ dài.' }
   ];
+
+  // Các thẻ tự đóng (không có thẻ đóng)
+  var VOID_TAGS = ['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr'];
 
   // Gợi ý thẻ khi gõ '<'
   function htmlTagHint(cmInstance) {
     var cur = cmInstance.getCursor();
     var line = cmInstance.getLine(cur.line);
     var start = cur.ch;
-    while (start > 0 && /[\w-]/.test(line.charAt(start - 1))) start--;
+    while (start > 0 && /[a-zA-Z0-9-]/.test(line.charAt(start - 1))) start--;
     // Gộp cả dấu '<' vào vùng thay thế để không sinh ra '<<html>'
     if (start > 0 && line.charAt(start - 1) === '<') start--;
-    var prefix = line.slice(start, cur.ch).toLowerCase();
+    var prefix = line.slice(start, cur.ch).replace('<', '').toLowerCase();
     var list = TAG_HINTS.filter(function(h) {
-      return h.text.toLowerCase().indexOf(prefix) === 0;
+      return h.t.indexOf(prefix) === 0;
     });
     return {
-      list: list.length ? list : TAG_HINTS.slice(0, 12),
+      list: (list.length ? list : TAG_HINTS).map(function(h) {
+        // Tạo cặp thẻ mở - đóng (thẻ void thì chỉ có thẻ mở)
+        var isVoid = VOID_TAGS.indexOf(h.t) !== -1;
+        var full = isVoid ? '<' + h.t + '>' : '<' + h.t + '></' + h.t + '>';
+        return {
+          text: full,
+          displayText: '<' + h.t + '>  —  ' + h.d,
+          // Chèn cả cặp thẻ rồi đặt con trỏ vào giữa (sau tên thẻ mở)
+          hint: function(cmI, data, comp) {
+            cmI.replaceRange(comp.text, data.from, data.to);
+            var midIndex = cmI.indexFromPos(data.from) + h.t.length + 1;
+            cmI.setCursor(cmI.posFromIndex(midIndex));
+          }
+        };
+      }),
       from: CodeMirror.Pos(cur.line, start),
-      to: CodeMirror.Pos(cur.line, cur.ch)
+      to: cur
     };
   }
 
-  // Bật autocomplete tự động khi gõ
+  // Ghi đè hành vi hoàn thành: chèn cặp thẻ mở/đóng
   cm.on('inputRead', function(cmInstance, change) {
-    var typed = change.text[0];
-    if (typed === '<') {
-      cmInstance.showHint({ hint: htmlTagHint, completeSingle: false });
-    } else if (/[a-zA-Z]/.test(typed)) {
-      // Gợi ý tiếp khi đang gõ tên thẻ sau '<'
-      var cur = cmInstance.getCursor();
-      var line = cmInstance.getLine(cur.line).slice(0, cur.ch);
-      var lt = line.lastIndexOf('<');
-      if (lt >= 0 && line.indexOf('>', lt) === -1) {
-        cmInstance.showHint({ hint: htmlTagHint, completeSingle: false });
-      }
+    if (change.text[0] === '<') {
+      cmInstance.showHint({
+        hint: htmlTagHint,
+        completeSingle: false,
+        closeOnUnfocus: true
+      });
+    } else if (cmInstance.state.completionActive) {
+      // Cập nhật danh sách khi đang gõ tiếp
+      cmInstance.state.completionActive.update({ hint: htmlTagHint });
     }
   });
 
@@ -126,36 +287,26 @@
   var HTML_SKELETON = '<!DOCTYPE html>\n<html>\n<head>\n<title>Tên Của Trang Web</title>\n</head>\n<body>\n<p>Nội Dung Của Trang Web</p>\n</body>\n</html>';
 
   // Thay toàn bộ tài liệu bằng khung mẫu và đặt con trỏ vào tên trang
-  function insertHtmlSkeleton(cmInstance, startLine) {
+  function insertHtmlSkeleton(cmInstance) {
     cmInstance.replaceRange(
       HTML_SKELETON,
       CodeMirror.Pos(0, 0),
       CodeMirror.Pos(cmInstance.lastLine(), cmInstance.getLine(cmInstance.lastLine()).length),
       '+skeleton'
     );
-    var tIdx = HTML_SKELETON.indexOf('Tên Của Trang Web');
-    if (tIdx >= 0) {
-      var upto = HTML_SKELETON.slice(0, tIdx);
-      var ls = upto.split('\n');
-      // Đưa con trỏ vào ngay giữa "Tên Của Trang Web" để sửa luôn
-      cmInstance.setCursor(CodeMirror.Pos(ls.length - 1, ls[ls.length - 1].length));
-    }
-    cmInstance.focus();
+    // Con trỏ tới vị trí "Tên Của Trang Web"
+    cmInstance.setCursor(CodeMirror.Pos(2, 7 + 'Tên Của Trang Web'.length));
+    setTimeout(function() { cmInstance.focus(); }, 50);
   }
 
   cm.on('change', function(cmInstance, change) {
-    if (change.origin === 'setValue' || change.origin === '+skeleton') return;
-    var typed = change.text ? change.text.join('') : '';
-    // Chỉ xử lý khi người dùng vừa gõ ký tự '>'
-    if (typed.indexOf('>') === -1) return;
-    // Chờ autoCloseTags xử lý xong rồi mới kiểm tra
+    if (change.origin === '+skeleton' || change.origin === 'setValue') return;
+    // Chờ 10ms cho autoCloseTags hoàn tất, sau đó kiểm tra
     setTimeout(function() {
-      var cur = cmInstance.getCursor();
-      var lineText = cmInstance.getLine(cur.line).slice(0, cur.ch);
-      // Dòng bắt đầu bằng <html> (kể cả khi đã bị auto-close thêm </html>)
+      var lineText = cmInstance.getLine(0) || '';
+      // Dòng đầu chứa <html> và tài liệu chưa đầy đủ
       if (/^\s*<html>/i.test(lineText)) {
         var full = cmInstance.getValue();
-        // Chỉ chèn nếu tài liệu chưa phải một trang HTML hoàn chỉnh
         if (full.toLowerCase().indexOf('<!doctype') === -1) {
           insertHtmlSkeleton(cmInstance);
         }
