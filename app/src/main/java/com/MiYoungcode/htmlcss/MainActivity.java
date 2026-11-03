@@ -20,8 +20,11 @@ import android.widget.PopupMenu;
 
 import org.json.JSONTokener;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 
@@ -48,6 +51,11 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQ_SAVE_HTML = 1001;
     private static final int REQ_SAVE_CSS = 1002;
     private static final int REQ_SAVE_FULL = 1003;
+
+    // Mã yêu cầu SAF khi mở/đọc file
+    private static final int REQ_OPEN_HTML = 2001;
+    private static final int REQ_OPEN_CSS = 2002;
+    private static final int REQ_OPEN_FULL = 2003;
 
     // Cờ: đang lưu HTML thì sau đó hỏi lưu tiếp CSS
     private boolean pendingSaveCss = false;
@@ -117,6 +125,8 @@ public class MainActivity extends AppCompatActivity {
         popup.getMenu().add(0, 2, 1, "Lưu style.css (mã CSS)");
         popup.getMenu().add(0, 3, 2, "Lưu trang hoàn chỉnh (HTML + CSS)");
         popup.getMenu().add(0, 4, 3, "Lưu cả 2 file HTML và CSS");
+        popup.getMenu().add(0, 5, 4, "Mở file HTML (.html)");
+        popup.getMenu().add(0, 6, 5, "Mở file CSS (.css)");
         popup.setOnMenuItemClickListener(item -> {
             switch (item.getItemId()) {
                 case 1:
@@ -131,6 +141,12 @@ public class MainActivity extends AppCompatActivity {
                 case 4:
                     pendingSaveCss = true;
                     saveFileDialog(REQ_SAVE_HTML);
+                    return true;
+                case 5:
+                    openFileDialog(REQ_OPEN_HTML);
+                    return true;
+                case 6:
+                    openFileDialog(REQ_OPEN_CSS);
                     return true;
             }
             return false;
@@ -159,6 +175,43 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Mở hộp thoại chọn file HTML/CSS để đọc
+    private void openFileDialog(int type) {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        // Dùng */* kèm EXTRA_MIME_TYPES để lọc đúng định dạng mong muốn
+        i.setType("*/*");
+        if (type == REQ_OPEN_CSS) {
+            i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"text/css", "text/plain"});
+        } else {
+            i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"text/html", "text/plain"});
+        }
+        try {
+            startActivityForResult(i, type);
+        } catch (Exception e) {
+            Toast.makeText(this, "Không mở được trình chọn file: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    // Đọc nội dung văn bản UTF-8 từ Uri do người dùng chọn
+    private String readTextFromUri(Uri uri) {
+        StringBuilder sb = new StringBuilder();
+        try (InputStream is = getContentResolver().openInputStream(uri)) {
+            if (is == null) return null;
+            BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"));
+            String line;
+            boolean first = true;
+            while ((line = reader.readLine()) != null) {
+                if (!first) sb.append('\n');
+                sb.append(line);
+                first = false;
+            }
+        } catch (Exception e) {
+            return null;
+        }
+        return sb.toString();
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -167,6 +220,27 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         final Uri uri = data.getData();
+        // Xử lý mở/đọc file HTML hoặc CSS
+        if (requestCode == REQ_OPEN_HTML || requestCode == REQ_OPEN_CSS) {
+            String content = readTextFromUri(uri);
+            if (content == null) {
+                Toast.makeText(this, "Không đọc được file", Toast.LENGTH_LONG).show();
+                return;
+            }
+            if (requestCode == REQ_OPEN_HTML) {
+                htmlContent = content;
+                if (isShowingCss) switchTab(false);
+                else loadCurrentIntoEditor();
+                Toast.makeText(this, "Đã mở file HTML", Toast.LENGTH_SHORT).show();
+            } else {
+                cssContent = content;
+                if (!isShowingCss) switchTab(true);
+                else loadCurrentIntoEditor();
+                Toast.makeText(this, "Đã mở file CSS", Toast.LENGTH_SHORT).show();
+            }
+            persistAll();
+            return;
+        }
         withFreshContent((html, css) -> {
             String text;
             String label;
