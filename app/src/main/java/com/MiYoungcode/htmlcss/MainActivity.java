@@ -128,6 +128,7 @@ public class MainActivity extends AppCompatActivity {
         popup.getMenu().add(0, 5, 4, "Mở file HTML (.html)");
         popup.getMenu().add(0, 6, 5, "Mở file CSS (.css)");
         popup.getMenu().add(0, 7, 6, "Mở trang hoàn chỉnh (tự tách CSS)");
+        popup.getMenu().add(0, 8, 7, "Định dạng code (Format)");
         popup.setOnMenuItemClickListener(item -> {
             switch (item.getItemId()) {
                 case 1:
@@ -151,6 +152,9 @@ public class MainActivity extends AppCompatActivity {
                     return true;
                 case 7:
                     openFileDialog(REQ_OPEN_FULL);
+                    return true;
+                case 8:
+                    formatCurrentCode();
                     return true;
             }
             return false;
@@ -428,6 +432,100 @@ public class MainActivity extends AppCompatActivity {
         }
         return "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
                 + cssTag + "\n</head>\n<body>\n" + bodyHtml + "\n</body>\n</html>";
+    }
+
+    // ===== Định dạng code (Beautify) =====
+    // Lấy nội dung tab đang hiển thị, format rồi nạp lại vào editor
+    private void formatCurrentCode() {
+        if (!editorReady) {
+            Toast.makeText(this, "Editor chưa sẵn sàng", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        webEditor.evaluateJavascript("window.getCode()", value -> {
+            String raw = unquoteJS(value);
+            if (isShowingCss) {
+                raw = beautifyCss(raw);
+                cssContent = raw;
+            } else {
+                raw = beautifyHtml(raw);
+                htmlContent = raw;
+            }
+            persistAll();
+            loadCurrentIntoEditor();
+            Toast.makeText(this, "Đã định dạng code", Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    // Định dạng CSS cơ bản: thụt lề theo cấp ngoặc nhọn, một khai báo mỗi dòng
+    private String beautifyCss(String src) {
+        StringBuilder out = new StringBuilder();
+        int indent = 0;
+        StringBuilder token = new StringBuilder();
+        boolean inString = false;
+        char strChar = 0;
+        for (int i = 0; i < src.length(); i++) {
+            char c = src.charAt(i);
+            if (inString) {
+                token.append(c);
+                if (c == strChar) inString = false;
+                continue;
+            }
+            if (c == '"' || c == '\'') {
+                inString = true;
+                strChar = c;
+                token.append(c);
+                continue;
+            }
+            if (c == '{') {
+                appendTrimmed(out, token, indent);
+                out.append(" {\n");
+                indent++;
+                token.setLength(0);
+            } else if (c == '}') {
+                appendTrimmed(out, token, indent);
+                indent = Math.max(0, indent - 1);
+                out.append(indentStr(indent)).append("}\n");
+                token.setLength(0);
+            } else if (c == ';') {
+                token.append(c);
+                appendTrimmed(out, token, indent);
+                token.setLength(0);
+            } else {
+                token.append(c);
+            }
+        }
+        if (token.toString().trim().length() > 0) appendTrimmed(out, token, indent);
+        return out.toString().trim();
+    }
+
+    // Ghi token đã trim vào out với thụt lề
+    private void appendTrimmed(StringBuilder out, StringBuilder token, int indent) {
+        String t = token.toString().trim();
+        if (t.length() == 0) return;
+        out.append(indentStr(indent)).append(t).append("\n");
+    }
+
+    private String indentStr(int level) {
+        StringBuilder s = new StringBuilder();
+        for (int i = 0; i < level; i++) s.append("  ");
+        return s.toString();
+    }
+
+    // Định dạng HTML cơ bản: thụt lề theo cặp thẻ đóng/mở
+    private String beautifyHtml(String src) {
+        String[] lines = src.split("\\r?\\n");
+        StringBuilder out = new StringBuilder();
+        int indent = 0;
+        for (String ln : lines) {
+            String t = ln.trim();
+            if (t.length() == 0) continue;
+            if (t.startsWith("</")) indent = Math.max(0, indent - 1);
+            out.append(indentStr(indent)).append(t).append("\n");
+            if (t.startsWith("<") && !t.startsWith("</") && !t.startsWith("<!") && !t.endsWith("/>") && !t.matches("<[^>]+>.*</[^>]+>.*") && !t.contains("</")) {
+                indent++;
+            }
+        }
+        return out.toString().trim();
     }
 
     // ===== Bridge để JS gọi auto-save =====
