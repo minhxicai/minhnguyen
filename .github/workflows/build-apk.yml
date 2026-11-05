@@ -3,30 +3,189 @@ on:
   push:
     branches: [ '**' ]
   workflow_dispatch:
+
+env:
+  APK_NAME: "Code-Html-CSS"
+  VERSION_MAJOR_MINOR: "1.0"
+  VERSION_CODE_OFFSET: "0"
+  APPEND_VERSION: "true"
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
+          cache: 'gradle'
+
+      - name: Kiểm tra & Chuẩn bị Android SDK
+        run: |
+          set -o pipefail
+          SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          if [ -d "$SDK_DIR" ]; then
+            echo "Máy build đã có sẵn Android SDK tại: $SDK_DIR (bỏ qua bước cài đặt lại SDK)" | tee -a build.log
+            export ANDROID_HOME="$SDK_DIR"
+            export ANDROID_SDK_ROOT="$SDK_DIR"
+            echo "ANDROID_HOME=$SDK_DIR" >> "$GITHUB_ENV"
+            echo "ANDROID_SDK_ROOT=$SDK_DIR" >> "$GITHUB_ENV"
+            mkdir -p "$SDK_DIR/licenses"
+            printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$SDK_DIR/licenses/android-sdk-license" || true
+            printf "\n84831b9409646a918e30573bab4c9c91346d8abd" > "$SDK_DIR/licenses/android-sdk-preview-license" || true
+            SDKM=$(ls "$SDK_DIR"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -n 1 || ls /usr/local/lib/android/sdk/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -n 1 || command -v sdkmanager 2>/dev/null || true)
+            if [ -n "$SDKM" ]; then
+              yes | "$SDKM" --licenses >/dev/null 2>&1 || true
+              if [ ! -d "$SDK_DIR/platforms/android-34" ] || [ ! -d "$SDK_DIR/build-tools/34.0.0" ]; then
+                "$SDKM" "platform-tools" "platforms;android-34" "build-tools;34.0.0" 2>&1 | tee -a build.log || true
+              fi
+            fi
+          else
+            echo "Chưa có SDK sẵn, tiến hành cài đặt gói SDK cơ bản..." | tee -a build.log
+            sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" 2>&1 | tee -a build.log || true
+          fi
+
+      - name: Kiểm tra trước khi build (Preflight)
+        run: |
+          set -o pipefail
+          {
+            echo "=== PREFLIGHT CHECK (BUILD_AUDIT_UI 1.2 & 1.4) ==="
+            java -version 2>&1
+            echo "ANDROID_HOME=${ANDROID_HOME}"
+            MISSING=0
+            if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
+              echo "::error::Thiếu settings.gradle hoặc settings.gradle.kts tại thư mục chạy Gradle"
+              MISSING=1
+            fi
+            if [ ! -f "build.gradle" ] && [ ! -f "build.gradle.kts" ]; then
+              echo "::error::Thiếu build.gradle hoặc build.gradle.kts gốc"
+              MISSING=1
+            fi
+            if [ ! -f "gradle.properties" ]; then
+              echo "android.useAndroidX=true" > gradle.properties
+              echo "Đã tự bổ sung gradle.properties (android.useAndroidX=true)"
+            elif ! grep -q "android.useAndroidX=true" gradle.properties; then
+              echo "" >> gradle.properties
+              echo "android.useAndroidX=true" >> gradle.properties
+              echo "Đã bổ sung android.useAndroidX=true vào gradle.properties"
+            fi
+            if [ ! -f "app/build.gradle" ] && [ ! -f "app/build.gradle.kts" ]; then
+              echo "::error::Thiếu module app/build.gradle hoặc app/build.gradle.kts"
+              MISSING=1
+            fi
+            if [ ! -f "app/src/main/AndroidManifest.xml" ] && [ ! -f "AndroidManifest.xml" ]; then
+              echo "::error::Thiếu app/src/main/AndroidManifest.xml"
+              MISSING=1
+            fi
+            if [ ! -f "./gradlew" ] || [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+              echo "Chưa có đầy đủ Gradle Wrapper (gradlew / gradle-wrapper.jar), đang khởi tạo..."
+              if command -v gradle >/dev/null 2>&1; then
+                gradle wrapper --gradle-version 8.7
+              else
+                curl -sSL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle.zip
+                unzip -q -o /tmp/gradle.zip -d /tmp
+                /tmp/gradle-8.9/bin/gradle wrapper --gradle-version 8.7
+              fi
+            fi
+            chmod +x gradlew
+            ./gradlew --version | head -n 15
+            if [ "$MISSING" -ne 0 ]; then
+              echo "::error::Preflight thất bại: Thiếu các file cấu hình bắt buộc ở trên."
+              exit 1
+            fi
+          } 2>&1 | tee -a build.log
+
+      - name: Tính phiên bản
+        run: |
+          VERSION_CODE=$(( VERSION_CODE_OFFSET + GITHUB_RUN_NUMBER ))
+          VERSION_NAME="${VERSION_MAJOR_MINOR}.${GITHUB_RUN_NUMBER}"
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          if [ "$APPEND_VERSION" = "true" ]; then
+            FINAL_NAME="${APK_NAME}-v${VERSION_NAME}"
+          else
+            FINAL_NAME="${APK_NAME}"
+          fi
+          echo "FINAL_APK_NAME=$FINAL_NAME" >> "$GITHUB_ENV"
+          echo "Phiên bản: $VERSION_NAME (versionCode: $VERSION_CODE), tên APK: $FINAL_NAME.apk"
+
+      - name: Chuẩn bị chữ ký cố định
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "Đang giải mã keystore cố định từ GitHub Secrets..."
+            mkdir -p "$HOME/.android"
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$HOME/.android/debug.keystore"
+            echo "HAS_KEYSTORE=true" >> "$GITHUB_ENV"
+            echo "Đã thiết lập chữ ký app cố định (~/.android/debug.keystore)."
+          else
+            echo "HAS_KEYSTORE=false" >> "$GITHUB_ENV"
+            echo "THÔNG BÁO: Chưa cấu hình KEYSTORE_BASE64 trong GitHub Secrets. Đang dùng khoá debug mặc định của máy chủ."
+          fi
+
       - name: Build Android APK
         run: |
+          set -o pipefail
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          if [ -f "./gradlew" ]; then
-            chmod +x gradlew
-            ./gradlew assembleDebug --no-daemon
-          else
-            gradle wrapper --gradle-version 8.7
-            chmod +x gradlew
-            ./gradlew assembleDebug --no-daemon
+          cat << 'EOF' > meow-init.gradle
+          allprojects {
+              configurations.all {
+                  resolutionStrategy.eachDependency { details ->
+                      if (details.requested.group == 'org.jetbrains.kotlin') {
+                          if (details.requested.name == 'kotlin-stdlib-jdk7' || details.requested.name == 'kotlin-stdlib-jdk8') {
+                              if (details.requested.version?.startsWith('1.5.') || details.requested.version?.startsWith('1.6.') || details.requested.version?.startsWith('1.7.')) {
+                                  details.useVersion '1.8.22'
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+          chmod +x gradlew
+          ./gradlew assembleDebug --init-script meow-init.gradle -PversionCode=$VERSION_CODE -PversionName=$VERSION_NAME --no-daemon --stacktrace 2>&1 | tee -a build.log
+
+      - name: Đưa lỗi thật lên annotation
+        if: failure()
+        run: |
+          if [ -f "build.log" ]; then
+            if grep -Eq "^\* What went wrong:" build.log; then
+              grep -E -A 15 "^\* What went wrong:" build.log | head -n 30 | sed 's/^/::error::/'
+            else
+              tail -n 30 build.log | sed 's/^/::error::/'
+            fi
           fi
+
+      - name: Lưu log lỗi
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
+
+      - name: Đặt tên APK
+        run: |
+          APK=$(find . -path "*/build/outputs/apk/debug/*.apk" 2>/dev/null | head -n 1)
+          if [ -z "$APK" ]; then
+            APK=$(find . -path "*/build/outputs/apk/*.apk" 2>/dev/null | head -n 1)
+          fi
+          if [ -z "$APK" ]; then
+            APK=$(find . -name "*.apk" 2>/dev/null | head -n 1)
+          fi
+          if [ -z "$APK" ]; then
+            echo "LỖI: Không tìm thấy file APK nào sau khi build!"
+            exit 1
+          fi
+          echo "Tìm thấy file APK gốc tại: $APK"
+          mkdir -p dist
+          cp "$APK" "dist/${FINAL_APK_NAME}.apk"
+          echo "Đã tạo APK xuất bản: dist/${FINAL_APK_NAME}.apk"
+
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: app-debug
-          path: |
-            **/build/outputs/apk/**/*.apk
-            **/build/outputs/**/*.apk
+          name: ${{ env.FINAL_APK_NAME }}
+          path: dist/${{ env.FINAL_APK_NAME }}.apk
+          if-no-files-found: error

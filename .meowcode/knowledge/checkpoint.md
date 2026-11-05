@@ -1,0 +1,32 @@
+### Checkpoint
+- Task: làm lại
+- Status: doing
+- Done:
+  - Đã xử lý 27 bước
+- Next: Rút gọn bộ nhớ và thực hiện tiếp
+- Files:
+  - settings.gradle
+  - build.gradle
+  - gradle.properties
+  - app/build.gradle
+  - app/src/main/AndroidManifest.xml
+  - app/src/main/res/values/strings.xml
+  - app/src/main/res/values/themes.xml
+  - app/src/main/res/layout/activity_main.xml
+  - app/src/main/assets/editor/index.html
+  - app/src/main/java/com/meowcode/htmlcss/MainActivity.java
+  - app/src/main/res/xml/file_paths.xml
+  - app/src/main/res/drawable/ic_launcher_foreground.xml
+  - app/src/main/res/drawable/ic_launcher_background.xml
+  - app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+  - app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+  - app/src/main/res/drawable/ic_launcher.xml
+  - app/src/main/res/mipmap-hdpi/ic_launcher.xml
+  - app/src/main/java/com/MiYoungcode/htmlcss/MainActivity.java
+  - .meowcode/build_config.json
+  - .gitignore
+  - tools/check_braces.py
+  - app/proguard-rules.pro
+- Decisions: Kích hoạt Checkpoint sớm do ngữ cảnh đạt ngưỡng an toàn
+- Blockers: Không
+- Domain: android-app

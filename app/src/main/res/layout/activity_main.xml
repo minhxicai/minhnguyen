@@ -83,6 +83,18 @@
             android:gravity="center"
             android:textColor="#AAAAAA"
             android:background="#2D2D2D"/>
+
+        <TextView
+            android:id="@+id/tabJs"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="script.js"
+            android:textSize="13sp"
+            android:padding="12dp"
+            android:gravity="center"
+            android:textColor="#AAAAAA"
+            android:background="#2D2D2D"/>
     </LinearLayout>
 
     <!-- Vùng code -->

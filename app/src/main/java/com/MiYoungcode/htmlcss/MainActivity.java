@@ -15,6 +15,11 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.core.content.FileProvider;
+import android.app.Dialog;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.view.ViewGroup;
+import android.view.Window;
 
 import android.widget.PopupMenu;
 
@@ -34,9 +39,10 @@ public class MainActivity extends AppCompatActivity {
     private static final String PREFS = "html_css_editor_prefs";
     private static final String KEY_HTML = "saved_html";
     private static final String KEY_CSS = "saved_css";
+    private static final String KEY_JS = "saved_js";
 
     private WebView webEditor;
-    private TextView tabHtml, tabCss, tvTitle;
+    private TextView tabHtml, tabCss, tabJs, tvTitle;
     private Button btnRun;
     private TextView btnMenu;
     private SharedPreferences prefs;
@@ -44,6 +50,9 @@ public class MainActivity extends AppCompatActivity {
     // Tài liệu hiện tại
     private String htmlContent = "";
     private String cssContent = "";
+    private String jsContent = "";
+    // currentTab: 0 = HTML, 1 = CSS, 2 = JS
+    private int currentTab = 0;
     private boolean isShowingCss = false;
     private boolean editorReady = false;
 
@@ -75,6 +84,7 @@ public class MainActivity extends AppCompatActivity {
         webEditor = findViewById(R.id.webEditor);
         tabHtml = findViewById(R.id.tabHtml);
         tabCss = findViewById(R.id.tabCss);
+        tabJs = findViewById(R.id.tabJs);
         tvTitle = findViewById(R.id.tvTitle);
         btnRun = findViewById(R.id.btnRun);
         btnMenu = findViewById(R.id.btnMenu);
@@ -82,6 +92,7 @@ public class MainActivity extends AppCompatActivity {
         // Khôi phục tiến trình đã lưu
         htmlContent = prefs.getString(KEY_HTML, defaultHtml());
         cssContent = prefs.getString(KEY_CSS, defaultCss());
+        jsContent = prefs.getString(KEY_JS, "");
 
         setupWebView();
         setupListeners();
@@ -112,9 +123,10 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        tabHtml.setOnClickListener(v -> switchTab(false));
-        tabCss.setOnClickListener(v -> switchTab(true));
-        btnRun.setOnClickListener(v -> runInChrome());
+        tabHtml.setOnClickListener(v -> switchTab(0));
+        tabCss.setOnClickListener(v -> switchTab(1));
+        tabJs.setOnClickListener(v -> switchTab(2));
+        btnRun.setOnClickListener(v -> showPreview());
         btnMenu.setOnClickListener(this::showSaveMenu);
     }
 
@@ -252,12 +264,12 @@ public class MainActivity extends AppCompatActivity {
             }
             if (requestCode == REQ_OPEN_HTML) {
                 htmlContent = content;
-                if (isShowingCss) switchTab(false);
+                if (currentTab != 0) switchTab(0);
                 else loadCurrentIntoEditor();
                 Toast.makeText(this, "Đã mở file HTML", Toast.LENGTH_SHORT).show();
             } else {
                 cssContent = content;
-                if (!isShowingCss) switchTab(true);
+                if (currentTab != 1) switchTab(1);
                 else loadCurrentIntoEditor();
                 Toast.makeText(this, "Đã mở file CSS", Toast.LENGTH_SHORT).show();
             }
@@ -314,10 +326,12 @@ public class MainActivity extends AppCompatActivity {
         }
         webEditor.evaluateJavascript("window.getCode()", value -> {
             String code = unquoteJS(value);
-            if (isShowingCss) {
+            if (currentTab == 0) {
+                htmlContent = code;
+            } else if (currentTab == 1) {
                 cssContent = code;
             } else {
-                htmlContent = code;
+                jsContent = code;
             }
             persistAll();
             callback.onContent(htmlContent, cssContent);
@@ -337,46 +351,57 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // Chuyển tab HTML / CSS
-    private void switchTab(boolean toCss) {
-        if (isShowingCss == toCss) return;
+    // Chuyển tab: 0 = HTML, 1 = CSS, 2 = JS
+    private void switchTab(int tab) {
+        if (currentTab == tab) return;
         // lưu nội dung tab hiện tại trước khi chuyển
         saveCurrentTab();
-        isShowingCss = toCss;
+        currentTab = tab;
         loadCurrentIntoEditor();
-        // cập nhật màu tab
-        if (toCss) {
-            tabCss.setBackgroundColor(0xFF1E1E1E);
-            tabCss.setTextColor(0xFFFFFFFF);
-            tabHtml.setBackgroundColor(0xFF2D2D2D);
-            tabHtml.setTextColor(0xFFAAAAAA);
-            tvTitle.setText("style.css");
-        } else {
-            tabHtml.setBackgroundColor(0xFF1E1E1E);
-            tabHtml.setTextColor(0xFFFFFFFF);
-            tabCss.setBackgroundColor(0xFF2D2D2D);
-            tabCss.setTextColor(0xFFAAAAAA);
-            tvTitle.setText("index.html");
-        }
+        // cập nhật màu tab (tab đang mở thì sáng, còn lại tối)
+        int activeBg = 0xFF1E1E1E, activeFg = 0xFFFFFFFF;
+        int idleBg = 0xFF2D2D2D, idleFg = 0xFFAAAAAA;
+        tabHtml.setBackgroundColor(tab == 0 ? activeBg : idleBg);
+        tabHtml.setTextColor(tab == 0 ? activeFg : idleFg);
+        tabCss.setBackgroundColor(tab == 1 ? activeBg : idleBg);
+        tabCss.setTextColor(tab == 1 ? activeFg : idleFg);
+        tabJs.setBackgroundColor(tab == 2 ? activeBg : idleBg);
+        tabJs.setTextColor(tab == 2 ? activeFg : idleFg);
+        tvTitle.setText(tab == 0 ? "index.html" : (tab == 1 ? "style.css" : "script.js"));
     }
 
+
+
+    // Nạp nội dung của tab hiện tại vào editor
     private void loadCurrentIntoEditor() {
         if (!editorReady) return;
-        String content = isShowingCss ? cssContent : htmlContent;
-        String mode = isShowingCss ? "css" : "htmlmixed";
-        // escape bằng cách dùng JSON string đơn giản
+        String content;
+        String mode;
+        if (currentTab == 0) {
+            content = htmlContent;
+            mode = "htmlmixed";
+        } else if (currentTab == 1) {
+            content = cssContent;
+            mode = "css";
+        } else {
+            content = jsContent;
+            mode = "javascript";
+        }
         String js = "window.setCode(" + quoteJS(content) + ", '" + mode + "');";
         webEditor.evaluateJavascript(js, null);
     }
 
+    // Lưu nội dung tab hiện tại từ editor vào biến
     private void saveCurrentTab() {
         if (!editorReady) return;
         webEditor.evaluateJavascript("window.getCode()", value -> {
             String code = unquoteJS(value);
-            if (isShowingCss) {
+            if (currentTab == 0) {
+                htmlContent = code;
+            } else if (currentTab == 1) {
                 cssContent = code;
             } else {
-                htmlContent = code;
+                jsContent = code;
             }
             persistAll();
         });
@@ -387,7 +412,91 @@ public class MainActivity extends AppCompatActivity {
         prefs.edit()
                 .putString(KEY_HTML, htmlContent)
                 .putString(KEY_CSS, cssContent)
+                .putString(KEY_JS, jsContent)
                 .apply();
+    }
+
+    // ===== Xem trước ngay trong app =====
+    // Lấy code đồng bộ từ editor rồi mở khung xem trước
+    private void showPreview() {
+        if (editorReady) {
+            webEditor.evaluateJavascript("window.getCode ? window.getCode() : ''", value -> {
+                String code = unquoteJS(value);
+                if (currentTab == 0) {
+                    htmlContent = code;
+                } else if (currentTab == 1) {
+                    cssContent = code;
+                } else {
+                    jsContent = code;
+                }
+                persistAll();
+                openPreviewDialog();
+            });
+        } else {
+            openPreviewDialog();
+        }
+    }
+
+    // Khung xem trước toàn màn hình bằng WebView
+    private void openPreviewDialog() {
+        final Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        int pad = (int) (12 * getResources().getDisplayMetrics().density);
+
+        // Khung dọc: thanh tiêu đề + WebView
+        android.widget.LinearLayout root = new android.widget.LinearLayout(this);
+        root.setOrientation(android.widget.LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.parseColor("#1E1E1E"));
+
+        // Thanh tiêu đề
+        android.widget.LinearLayout bar = new android.widget.LinearLayout(this);
+        bar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        bar.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        bar.setBackgroundColor(Color.parseColor("#252526"));
+        bar.setPadding(pad, pad, pad, pad);
+
+        TextView title = new TextView(this);
+        title.setText("Xem trước");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(16);
+        bar.addView(title, new android.widget.LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView btnClose = new TextView(this);
+        btnClose.setText("✕");
+        btnClose.setTextColor(Color.WHITE);
+        btnClose.setTextSize(18);
+        btnClose.setPadding(pad, 0, pad, 0);
+        bar.addView(btnClose, new android.widget.LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        root.addView(bar, new android.widget.LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        // WebView hiển thị kết quả
+        WebView preview = new WebView(this);
+        WebSettings ps = preview.getSettings();
+        ps.setJavaScriptEnabled(true);
+        ps.setDomStorageEnabled(true);
+        ps.setUseWideViewPort(true);
+        ps.setLoadWithOverviewMode(true);
+        preview.setBackgroundColor(Color.WHITE);
+
+        root.addView(preview, new android.widget.LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        preview.loadDataWithBaseURL(null, buildFullHtml(), "text/html", "UTF-8", null);
+
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+
+        dialog.setContentView(root);
+        Window w = dialog.getWindow();
+        if (w != null) {
+            w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        }
+        dialog.show();
     }
 
     // Mở Chrome xem trước
@@ -425,13 +534,23 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String buildFullHtml(String bodyHtml, String css) {
-        // nếu người dùng đã có thẻ <html> hoàn chỉnh thì chèn CSS vào <head>
+        return buildFullHtml(bodyHtml, css, jsContent);
+    }
+
+    // Ghép HTML + CSS + JS thành 1 trang hoàn chỉnh
+    private String buildFullHtml(String bodyHtml, String css, String js) {
         String cssTag = "<style>\n" + css + "\n</style>";
+        String jsTag = (js == null || js.trim().isEmpty()) ? "" : "<script>\n" + js + "\n</script>";
+        // nếu người dùng đã có thẻ <html> hoàn chỉnh thì chèn CSS/JS vào <head>
         if (bodyHtml.toLowerCase().contains("<head>")) {
-            return bodyHtml.replaceFirst("(?i)<head>", "<head>\n" + cssTag + "\n");
+            String result = bodyHtml.replaceFirst("(?i)<head>", "<head>\n" + cssTag + "\n");
+            if (!jsTag.isEmpty()) {
+                result = result.replaceFirst("(?i)</body>", jsTag + "\n</body>");
+            }
+            return result;
         }
         return "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
-                + cssTag + "\n</head>\n<body>\n" + bodyHtml + "\n</body>\n</html>";
+                + cssTag + "\n</head>\n<body>\n" + bodyHtml + "\n" + jsTag + "\n</body>\n</html>";
     }
 
     // ===== Định dạng code (Beautify) =====
@@ -443,10 +562,10 @@ public class MainActivity extends AppCompatActivity {
         }
         webEditor.evaluateJavascript("window.getCode()", value -> {
             String raw = unquoteJS(value);
-            if (isShowingCss) {
+            if (currentTab == 1) {
                 raw = beautifyCss(raw);
                 cssContent = raw;
-            } else {
+            } else if (currentTab == 0) {
                 raw = beautifyHtml(raw);
                 htmlContent = raw;
             }
@@ -533,7 +652,9 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void onCodeChanged(String value) {
             runOnUiThread(() -> {
-                if (isShowingCss) cssContent = value; else htmlContent = value;
+                if (currentTab == 0) htmlContent = value;
+                else if (currentTab == 1) cssContent = value;
+                else jsContent = value;
                 persistAll();
             });
         }
