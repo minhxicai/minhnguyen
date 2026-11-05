@@ -1,9 +1,9 @@
 ### Checkpoint
-- Task: làm lại
+- Task: tạo chức năng hiện 1 popup nhỏ gợi ý thẻ
 - Status: doing
 - Done:
-  - Đã xử lý 27 bước
-- Next: Rút gọn bộ nhớ và thực hiện tiếp
+  - Đã thực hiện 136 bước thao tác
+- Next: Tiếp tục hoàn thiện mã nguồn
 - Files:
   - settings.gradle
   - build.gradle
@@ -27,6 +27,10 @@
   - .gitignore
   - tools/check_braces.py
   - app/proguard-rules.pro
-- Decisions: Kích hoạt Checkpoint sớm do ngữ cảnh đạt ngưỡng an toàn
+  - app/src/main/assets/editor/_ext.py
+  - app/src/main/assets/editor/_ext.js
+  - tmp/extract_js.py
+  - tmp/extract_js.js
+- Decisions: Không
 - Blockers: Không
 - Domain: android-app

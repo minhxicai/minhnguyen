@@ -1,10 +1,5 @@
 {
-  "appName": "Code Html CSS",
-  "apkName": "Code-Html-CSS",
-  "versionName": "1.0",
-  "versionCode": 1,
-  "applicationId": "com.MiYoungcode.htmlcss",
-  "minSdk": 21,
-  "targetSdk": 34,
-  "compileSdk": 34
+    "apkName": "Code-Html-CSS",
+    "appName": "Code Html CSS",
+    "lastBuildVersion": "1.0.25."
 }
