@@ -1,9 +1,9 @@
 ### Checkpoint
-- Task: build
+- Task: build app
 - Status: doing
 - Done:
-  - Đã xử lý 4 bước
-- Next: Rút gọn bộ nhớ và thực hiện tiếp
+  - Đã thực hiện 54 bước thao tác
+- Next: Tiếp tục hoàn thiện mã nguồn
 - Files:
   - settings.gradle
   - build.gradle
@@ -31,6 +31,9 @@
   - app/src/main/assets/editor/_ext.js
   - tmp/extract_js.py
   - tmp/extract_js.js
-- Decisions: Kích hoạt Checkpoint sớm do ngữ cảnh đạt ngưỡng an toàn
+  - tmp/diag.sh
+  - tmp/diag2.sh
+  - tmp/g.sh
+- Decisions: Không
 - Blockers: Không
 - Domain: android-app

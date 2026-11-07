@@ -1,0 +1,2 @@
+openjdk version "17.0.12" 2024-07-16
+OpenJDK Runtime Environment Temurin-17.0.12+7 (build 17.0.12+7)
