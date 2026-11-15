@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>HTML &amp; CSS Demo</title>
+  <!-- Chạy trước stylesheet: đặt data-theme sớm để không nhấp nháy nền sáng ở chế độ tối -->
+  <script src="theme-boot.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="app-bar">
+    <div class="app-bar__title">
+      <span class="logo">&lt;/&gt;</span>
+      <div>
+        <h1>HTML &amp; CSS</h1>
+        <p class="subtitle">Giao diện chạy trong WebView</p>
+      </div>
+    </div>
+    <button id="themeToggle" class="icon-btn" type="button" aria-label="Đổi chế độ sáng tối">🌙</button>
+  </header>
+
+  <main class="content">
+    <section class="card hero">
+      <h2>Xin chào 👋</h2>
+      <p>
+        Đây là giao diện web đóng gói sẵn trong thư mục <code>assets</code> của ứng dụng.
+        Không cần mạng, hiển thị tức thì khi mở app.
+      </p>
+      <div class="chips">
+        <span class="chip">HTML</span>
+        <span class="chip">CSS</span>
+        <span class="chip">JavaScript</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Bộ đếm tương tác</h2>
+      <p class="muted">Số lần bấm được lưu lại sau khi tắt ứng dụng (localStorage).</p>
+      <div class="counter">
+        <button id="btnMinus" class="btn btn--ghost" type="button">−</button>
+        <output id="countValue" aria-live="polite">0</output>
+        <button id="btnPlus" class="btn" type="button">+</button>
+      </div>
+      <button id="btnReset" class="btn btn--text" type="button">Đặt lại</button>
+    </section>
+
+    <section class="card">
+      <h2>Danh sách công việc</h2>
+      <form id="todoForm" class="todo-form" autocomplete="off">
+        <input id="todoInput" type="text" placeholder="Nhập việc cần làm…" maxlength="80" />
+        <button class="btn" type="submit">Thêm</button>
+      </form>
+      <ul id="todoList" class="todo-list"></ul>
+      <p id="todoEmpty" class="empty">Chưa có công việc nào.</p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span id="deviceInfo">MeowCode · Android</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

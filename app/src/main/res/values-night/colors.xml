@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Chỉ ghi đè màu tạm (trước khi web báo theme). Các màu theo theme web
+         (app_background / app_background_dark) KHÔNG được có biến thể night,
+         nếu không native sẽ lệch với lựa chọn sáng/tối của người dùng. -->
+    <color name="app_background_system">#0F1116</color>
+</resources>

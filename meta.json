@@ -1,0 +1,15 @@
+{
+    "id": "p_3c70c7153abe",
+    "name": "html css",
+    "template": "android",
+    "createdAt": 1794661646433,
+    "updatedAt": 1794674642801,
+    "description": "",
+    "selectedModel": "",
+    "permissionMode": "turbo",
+    "orchestratorMode": "",
+    "reasoningEffort": "",
+    "purposeMode": "android",
+    "supportStatus": "unsupported",
+    "supportReason": "Biên dịch Gradle APK (cần JDK 17, Android SDK platforms/android-35, aapt2 aarch64 và >4GB RAM)."
+}
